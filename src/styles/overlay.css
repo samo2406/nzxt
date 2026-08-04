@@ -15,10 +15,10 @@
 .info__clock {
   position: absolute;
   left: 50%;
-  top: 13.5%;
+  top: 14.5%;
   transform: translate(-50%, -50%);
   font-family: var(--font-mono);
-  font-size: calc(54px * var(--u));
+  font-size: calc(64px * var(--u));
   line-height: 1;
   letter-spacing: 0.03em;
   font-variant-numeric: tabular-nums;
@@ -29,10 +29,10 @@
 .info__date {
   position: absolute;
   left: 50%;
-  top: 20.8%;
+  top: 23%;
   transform: translate(-50%, -50%);
   font-family: var(--font-mono);
-  font-size: calc(22px * var(--u));
+  font-size: calc(27px * var(--u));
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--ink-dim);
@@ -42,11 +42,11 @@
 .info__weather {
   position: absolute;
   left: 50%;
-  top: 27.8%;
+  top: 31%;
   transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
-  gap: calc(8px * var(--u));
+  gap: calc(9px * var(--u));
   opacity: 0;
   transition: opacity 400ms ease;
 }
@@ -57,8 +57,8 @@
 
 .info__weather-icon {
   display: block;
-  width: calc(30px * var(--u));
-  height: calc(30px * var(--u));
+  width: calc(36px * var(--u));
+  height: calc(36px * var(--u));
   color: var(--ink-dim);
   filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(0, 0, 0, 0.7));
 }
@@ -71,7 +71,7 @@
 
 .info__weather-temp {
   font-family: var(--font-mono);
-  font-size: calc(30px * var(--u));
+  font-size: calc(36px * var(--u));
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
@@ -88,10 +88,10 @@
 .info__temps {
   position: absolute;
   left: 50%;
-  top: 83.5%;
+  top: 80.5%;
   transform: translate(-50%, -50%);
   display: flex;
-  gap: calc(26px * var(--u));
+  gap: calc(28px * var(--u));
   align-items: baseline;
   opacity: 0;
   transition: opacity 400ms ease;
@@ -104,7 +104,7 @@
 .info__cell {
   display: inline-flex;
   align-items: baseline;
-  gap: calc(9px * var(--u));
+  gap: calc(10px * var(--u));
   font-family: var(--font-mono);
   line-height: 1;
   white-space: nowrap;
@@ -113,13 +113,13 @@
 .info__label {
   color: var(--ink-faint);
   letter-spacing: 0.1em;
-  font-size: calc(16px * var(--u));
+  font-size: calc(19px * var(--u));
   text-shadow: 0 calc(1px * var(--u)) calc(8px * var(--u)) rgba(0, 0, 0, 0.8);
 }
 
 .info__value {
   color: var(--ink);
-  font-size: calc(48px * var(--u));
+  font-size: calc(56px * var(--u));
   font-variant-numeric: tabular-nums;
   transition: color 600ms ease;
   text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(0, 0, 0, 0.8);
@@ -134,27 +134,36 @@
   color: #ffb26b;
 }
 
-/* ------------------------------------------------------------------- ink */
+/* --------------------------------------------------------------------- ink */
 
-/* Bright photos flip the ink; the shadows flip tone with it. */
-.info[data-ink='dark'] .info__clock,
-.info[data-ink='dark'] .info__weather-temp,
-.info[data-ink='dark'] .info__value {
+/* Each group flips independently, judged on its own band of the photo;
+   shadows flip tone with the ink. */
+.info[data-ink-top='dark'] .info__clock,
+.info[data-ink-top='dark'] .info__weather-temp {
   color: rgba(14, 14, 18, 0.94);
   text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(255, 255, 255, 0.65);
 }
 
-.info[data-ink='dark'] .info__date,
-.info[data-ink='dark'] .info__label {
+.info[data-ink-top='dark'] .info__date {
   color: rgba(14, 14, 18, 0.6);
   text-shadow: 0 calc(1px * var(--u)) calc(8px * var(--u)) rgba(255, 255, 255, 0.55);
 }
 
-.info[data-ink='dark'] .info__weather-icon {
+.info[data-ink-top='dark'] .info__weather-icon {
   color: rgba(14, 14, 18, 0.6);
   filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(255, 255, 255, 0.55));
 }
 
-.info[data-ink='dark'] .info__value[data-warn='true'] {
+.info[data-ink-bottom='dark'] .info__value {
+  color: rgba(14, 14, 18, 0.94);
+  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(255, 255, 255, 0.65);
+}
+
+.info[data-ink-bottom='dark'] .info__label {
+  color: rgba(14, 14, 18, 0.6);
+  text-shadow: 0 calc(1px * var(--u)) calc(8px * var(--u)) rgba(255, 255, 255, 0.55);
+}
+
+.info[data-ink-bottom='dark'] .info__value[data-warn='true'] {
   color: #b34700;
 }

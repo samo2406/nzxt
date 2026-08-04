@@ -1,6 +1,7 @@
 import type { Telemetry } from '../data/nzxt';
 import type { Settings } from '../data/settings';
 import type { WeatherNow } from '../data/weather';
+import type { InkPair } from './slideshow';
 import '../styles/overlay.css';
 
 const PLACEHOLDER = '--';
@@ -57,7 +58,8 @@ export class InfoOverlay {
     this.settings = settings;
     this.el = document.createElement('div');
     this.el.className = 'info';
-    this.el.dataset.ink = 'light';
+    this.el.dataset.inkTop = 'light';
+    this.el.dataset.inkBottom = 'light';
 
     this.clock = el('div', 'info__clock');
     this.date = el('div', 'info__date');
@@ -121,9 +123,11 @@ export class InfoOverlay {
     node.dataset.warn = warn ? 'true' : 'false';
   }
 
-  /** Called by the slideshow with the tone that stays readable on the photo. */
-  setInk(ink: 'light' | 'dark'): void {
-    this.el.dataset.ink = ink;
+  /** Called by the slideshow: each text group gets the tone that stays
+   *  readable over its own band of the current photo. */
+  setInk(ink: InkPair): void {
+    this.el.dataset.inkTop = ink.top;
+    this.el.dataset.inkBottom = ink.bottom;
   }
 
   applySettings(settings: Settings): void {
