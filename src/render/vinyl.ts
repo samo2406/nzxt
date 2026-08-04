@@ -121,8 +121,7 @@ export class VinylView implements ScreenView {
     void loadImage(back, now.artUrl)
       .then(() => {
         if (token !== this.artToken) return;
-        back.dataset.front = 'true';
-        front.dataset.front = 'false';
+        this.swapArt(back, front);
         this.artFront = 1 - this.artFront;
       })
       .catch(() => {
@@ -132,6 +131,35 @@ export class VinylView implements ScreenView {
     void accentFrom(now.artUrl).then((accent) => {
       if (token === this.artToken) this.el.style.setProperty('--accent', accent);
     });
+  }
+
+  /**
+   * Track change reads as changing the record: the old face lifts off (scales
+   * down, fades) while the new one drops on with a slight overshoot. Scale is
+   * the only spatial move — it is rotation-invariant, so it composes cleanly
+   * with whatever phase the spinning parent happens to be at. Transform and
+   * opacity only, and the transient animations are GC'd once finished.
+   */
+  private swapArt(back: HTMLImageElement, front: HTMLImageElement): void {
+    back.dataset.front = 'true';
+    front.dataset.front = 'false';
+    if (prefersReducedMotion()) return;
+
+    back.animate(
+      [
+        { transform: 'scale(1.16)', opacity: 0 },
+        { transform: 'scale(0.97)', opacity: 1, offset: 0.72 },
+        { transform: 'scale(1)', opacity: 1 },
+      ],
+      { duration: 700, easing: 'cubic-bezier(0.22, 0.9, 0.3, 1)' },
+    );
+    front.animate(
+      [
+        { transform: 'scale(1)', opacity: 1 },
+        { transform: 'scale(0.82)', opacity: 0 },
+      ],
+      { duration: 480, easing: 'cubic-bezier(0.5, 0, 0.8, 0.4)' },
+    );
   }
 
   /** Two half-rings rotated into view: a pure transform, so the arc never

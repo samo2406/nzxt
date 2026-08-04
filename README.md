@@ -6,7 +6,7 @@ Three states on one page:
 
 - **Slideshow** — your own photos, crossfading. They are stored in the browser and never leave the machine.
 - **Now playing** — the album art becomes a full-screen rotating record, with progress as a hairline arc riding the outer rim and no text anywhere. Takes over automatically when something plays; falls back to the slideshow a configurable delay after it stops.
-- **Temperatures** — a monospace readout of CPU and GPU temperature at the bottom of the circle, shown on the slideshow only; the music screen carries no text at all. Toggleable.
+- **Clock + temperatures** — the current time at the top of the circle with CPU and GPU temperatures beneath it, slideshow only; the music screen carries no text at all. The ink flips light/dark per photo so it stays readable, and the temperature row is toggleable.
 
 The configuration window is in Slovak. Code, comments and commits are in English.
 

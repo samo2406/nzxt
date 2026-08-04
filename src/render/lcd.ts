@@ -4,9 +4,9 @@ import { installMonitoring, type Telemetry } from '../data/nzxt';
 import type { PlayerSource } from '../data/player';
 import { getSettings, onSettingsChange } from '../data/settings';
 import { isConnected, onAuthChange, SpotifyPlayer } from '../data/spotify';
+import { InfoOverlay } from './overlay';
 import { Screen } from './screen';
 import { SlideshowView } from './slideshow';
-import { TelemetryOverlay } from './telemetry';
 import { VinylView } from './vinyl';
 
 export interface LcdOptions {
@@ -41,21 +41,21 @@ export async function mountLcd(
   const settings = getSettings();
   const screen = new Screen(host, metrics);
 
-  const telemetry = new TelemetryOverlay(settings);
-  screen.overlay.append(telemetry.el);
+  const overlay = new InfoOverlay(settings);
+  screen.overlay.append(overlay.el);
 
   let sawMonitoring = false;
   installMonitoring((data) => {
     sawMonitoring = true;
-    telemetry.update(data);
+    overlay.update(data);
   });
   const sampleTimer = options.sampleTelemetryIfSilent
     ? window.setTimeout(() => {
-        if (!sawMonitoring) telemetry.update(SAMPLE_TELEMETRY);
+        if (!sawMonitoring) overlay.update(SAMPLE_TELEMETRY);
       }, SAMPLE_DELAY_MS)
     : 0;
 
-  const slideshow = new SlideshowView(settings);
+  const slideshow = new SlideshowView(settings, (ink) => overlay.setInk(ink));
   const vinyl = new VinylView(metrics, settings);
   screen.register('slideshow', slideshow);
   screen.register('spotify', vinyl);
@@ -65,7 +65,7 @@ export async function mountLcd(
   screen.show('slideshow');
 
   const offSettings = onSettingsChange((next) => {
-    telemetry.applySettings(next);
+    overlay.applySettings(next);
     slideshow.applySettings(next);
     vinyl.applySettings(next);
     state.setFallbackMs(next.spotify.fallbackMs);
@@ -110,7 +110,7 @@ export async function mountLcd(
       offAuth();
       offPlayerSettings();
       player?.stop();
-      telemetry.destroy();
+      overlay.destroy();
       screen.destroy();
     },
   };

@@ -51,6 +51,8 @@
   );
 }
 
+/* Swaps are driven by script animations (the record-change move); the
+   data-front attribute only pins the resting state. */
 .vinyl__art {
   position: absolute;
   inset: 0;
@@ -59,7 +61,6 @@
   object-fit: cover;
   border-radius: 50%;
   opacity: 0;
-  transition: opacity 700ms ease;
 }
 
 .vinyl__art[data-front='true'] {
@@ -194,9 +195,5 @@
 @media (prefers-reduced-motion: reduce) {
   .vinyl__sheen {
     animation: none;
-  }
-
-  .vinyl__art {
-    transition-duration: 1ms;
   }
 }

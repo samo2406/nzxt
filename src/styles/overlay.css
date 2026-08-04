@@ -1,0 +1,101 @@
+.info {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+/* The music screen carries no text at all, temperatures included. */
+.screen[data-screen='spotify'] .info {
+  opacity: 0;
+}
+
+.info__clock {
+  position: absolute;
+  left: 50%;
+  top: 17%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-mono);
+  font-size: calc(56px * var(--u));
+  line-height: 1;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-shadow: 0 calc(1px * var(--u)) calc(12px * var(--u)) rgba(0, 0, 0, 0.8);
+}
+
+.info__temps {
+  position: absolute;
+  left: 50%;
+  top: 30.5%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: calc(30px * var(--u));
+  align-items: center;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.info__temps[data-on='true'] {
+  opacity: 1;
+}
+
+.info__cell {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(9px * var(--u));
+  font-family: var(--font-mono);
+  font-size: calc(48px * var(--u));
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.info__icon {
+  display: block;
+  width: calc(27px * var(--u));
+  height: calc(27px * var(--u));
+  color: var(--ink-dim);
+  filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(0, 0, 0, 0.7));
+}
+
+.info__icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.info__value {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  transition: color 600ms ease;
+  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(0, 0, 0, 0.8);
+}
+
+.info__value::after {
+  content: '°';
+  opacity: 0.5;
+}
+
+.info__value[data-warn='true'] {
+  color: #ffb26b;
+}
+
+/* Bright photos flip the ink; the shadows flip tone with it. */
+.info[data-ink='dark'] .info__clock {
+  color: rgba(14, 14, 18, 0.94);
+  text-shadow: 0 calc(1px * var(--u)) calc(12px * var(--u)) rgba(255, 255, 255, 0.65);
+}
+
+.info[data-ink='dark'] .info__icon {
+  color: rgba(14, 14, 18, 0.6);
+  filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(255, 255, 255, 0.55));
+}
+
+.info[data-ink='dark'] .info__value {
+  color: rgba(14, 14, 18, 0.94);
+  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(255, 255, 255, 0.65);
+}
+
+.info[data-ink='dark'] .info__value[data-warn='true'] {
+  color: #b34700;
+}

@@ -51,7 +51,7 @@ function telemetryPanel(): HTMLElement {
   const degrees = (v: number) => `${v} °C`;
   return section(
     'Teploty',
-    'CPU a GPU v spodnej časti kruhu, len v režime prezentácie. Nad prahom sa hodnota zvýrazní.',
+    'CPU a GPU pod hodinami v hornej časti, len v režime prezentácie. Nad prahom sa hodnota zvýrazní.',
     toggleField('Zobrazovať teploty', t.enabled, (enabled) => updateSettings({ telemetry: { enabled } })),
     rangeField('Prah CPU', { min: 50, max: 100, step: 1, value: t.cpuWarnC, format: degrees }, (cpuWarnC) =>
       updateSettings({ telemetry: { cpuWarnC } }),
