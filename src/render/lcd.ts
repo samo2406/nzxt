@@ -4,6 +4,7 @@ import { installMonitoring, type Telemetry } from '../data/nzxt';
 import type { PlayerSource } from '../data/player';
 import { getSettings, onSettingsChange } from '../data/settings';
 import { isConnected, onAuthChange, SpotifyPlayer } from '../data/spotify';
+import { WeatherSource } from '../data/weather';
 import { InfoOverlay } from './overlay';
 import { Screen } from './screen';
 import { SlideshowView } from './slideshow';
@@ -55,6 +56,9 @@ export async function mountLcd(
       }, SAMPLE_DELAY_MS)
     : 0;
 
+  const weather = new WeatherSource((now) => overlay.setWeather(now));
+  weather.sync(settings.weather);
+
   const slideshow = new SlideshowView(settings, (ink) => overlay.setInk(ink));
   const vinyl = new VinylView(metrics, settings);
   screen.register('slideshow', slideshow);
@@ -66,6 +70,7 @@ export async function mountLcd(
 
   const offSettings = onSettingsChange((next) => {
     overlay.applySettings(next);
+    weather.sync(next.weather);
     slideshow.applySettings(next);
     vinyl.applySettings(next);
     state.setFallbackMs(next.spotify.fallbackMs);
@@ -110,6 +115,7 @@ export async function mountLcd(
       offAuth();
       offPlayerSettings();
       player?.stop();
+      weather.destroy();
       overlay.destroy();
       screen.destroy();
     },

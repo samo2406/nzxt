@@ -10,13 +10,15 @@
   opacity: 0;
 }
 
+/* ---------------------------------------------------------------- top stack */
+
 .info__clock {
   position: absolute;
   left: 50%;
-  top: 17%;
+  top: 13.5%;
   transform: translate(-50%, -50%);
   font-family: var(--font-mono);
-  font-size: calc(56px * var(--u));
+  font-size: calc(54px * var(--u));
   line-height: 1;
   letter-spacing: 0.03em;
   font-variant-numeric: tabular-nums;
@@ -24,14 +26,73 @@
   text-shadow: 0 calc(1px * var(--u)) calc(12px * var(--u)) rgba(0, 0, 0, 0.8);
 }
 
+.info__date {
+  position: absolute;
+  left: 50%;
+  top: 20.8%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-mono);
+  font-size: calc(22px * var(--u));
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  text-shadow: 0 calc(1px * var(--u)) calc(9px * var(--u)) rgba(0, 0, 0, 0.8);
+}
+
+.info__weather {
+  position: absolute;
+  left: 50%;
+  top: 27.8%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--u));
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.info__weather[data-on='true'] {
+  opacity: 1;
+}
+
+.info__weather-icon {
+  display: block;
+  width: calc(30px * var(--u));
+  height: calc(30px * var(--u));
+  color: var(--ink-dim);
+  filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(0, 0, 0, 0.7));
+}
+
+.info__weather-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.info__weather-temp {
+  font-family: var(--font-mono);
+  font-size: calc(30px * var(--u));
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(0, 0, 0, 0.8);
+}
+
+.info__weather-temp::after {
+  content: '°';
+  opacity: 0.5;
+}
+
+/* ------------------------------------------------------------------ bottom */
+
 .info__temps {
   position: absolute;
   left: 50%;
-  top: 30.5%;
+  top: 83.5%;
   transform: translate(-50%, -50%);
   display: flex;
-  gap: calc(30px * var(--u));
-  align-items: center;
+  gap: calc(26px * var(--u));
+  align-items: baseline;
   opacity: 0;
   transition: opacity 400ms ease;
 }
@@ -42,30 +103,23 @@
 
 .info__cell {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: calc(9px * var(--u));
   font-family: var(--font-mono);
-  font-size: calc(48px * var(--u));
   line-height: 1;
   white-space: nowrap;
 }
 
-.info__icon {
-  display: block;
-  width: calc(27px * var(--u));
-  height: calc(27px * var(--u));
-  color: var(--ink-dim);
-  filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(0, 0, 0, 0.7));
-}
-
-.info__icon svg {
-  display: block;
-  width: 100%;
-  height: 100%;
+.info__label {
+  color: var(--ink-faint);
+  letter-spacing: 0.1em;
+  font-size: calc(16px * var(--u));
+  text-shadow: 0 calc(1px * var(--u)) calc(8px * var(--u)) rgba(0, 0, 0, 0.8);
 }
 
 .info__value {
   color: var(--ink);
+  font-size: calc(48px * var(--u));
   font-variant-numeric: tabular-nums;
   transition: color 600ms ease;
   text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(0, 0, 0, 0.8);
@@ -80,20 +134,25 @@
   color: #ffb26b;
 }
 
+/* ------------------------------------------------------------------- ink */
+
 /* Bright photos flip the ink; the shadows flip tone with it. */
-.info[data-ink='dark'] .info__clock {
-  color: rgba(14, 14, 18, 0.94);
-  text-shadow: 0 calc(1px * var(--u)) calc(12px * var(--u)) rgba(255, 255, 255, 0.65);
-}
-
-.info[data-ink='dark'] .info__icon {
-  color: rgba(14, 14, 18, 0.6);
-  filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(255, 255, 255, 0.55));
-}
-
+.info[data-ink='dark'] .info__clock,
+.info[data-ink='dark'] .info__weather-temp,
 .info[data-ink='dark'] .info__value {
   color: rgba(14, 14, 18, 0.94);
   text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(255, 255, 255, 0.65);
+}
+
+.info[data-ink='dark'] .info__date,
+.info[data-ink='dark'] .info__label {
+  color: rgba(14, 14, 18, 0.6);
+  text-shadow: 0 calc(1px * var(--u)) calc(8px * var(--u)) rgba(255, 255, 255, 0.55);
+}
+
+.info[data-ink='dark'] .info__weather-icon {
+  color: rgba(14, 14, 18, 0.6);
+  filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(255, 255, 255, 0.55));
 }
 
 .info[data-ink='dark'] .info__value[data-warn='true'] {

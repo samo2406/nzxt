@@ -1,37 +1,57 @@
 import type { Telemetry } from '../data/nzxt';
 import type { Settings } from '../data/settings';
+import type { WeatherNow } from '../data/weather';
 import '../styles/overlay.css';
 
 const PLACEHOLDER = '--';
 
-const CPU_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">' +
-  '<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="10" y="10" width="4" height="4"/>' +
-  '<path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg>';
+const ICON_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"';
 
-const GPU_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">' +
-  '<rect x="2.5" y="6" width="19" height="11" rx="2"/><circle cx="14.5" cy="11.5" r="3.4"/>' +
-  '<path d="M6.5 17v3.5M11 17v3.5"/></svg>';
+/** Minimal line glyphs keyed by WMO weather code group. */
+const WEATHER_ICONS: Record<string, string> = {
+  sun: `<svg ${ICON_ATTRS}><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12h2.5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19"/></svg>`,
+  partly: `<svg ${ICON_ATTRS}><circle cx="9" cy="9" r="3.4"/><path d="M9 3.2v1.6M3.2 9h1.6M4.9 4.9l1.2 1.2M14.8 9.4a4.3 4.3 0 0 1 4 2.9 3.4 3.4 0 0 1-.7 6.7H9.3a3.6 3.6 0 0 1-.6-7.1 4.3 4.3 0 0 1 6.1-2.5z" fill="none"/></svg>`,
+  cloud: `<svg ${ICON_ATTRS}><path d="M7.2 18.5a4.2 4.2 0 0 1-.6-8.3 5 5 0 0 1 9.6-1.2 4.6 4.6 0 0 1-.9 9.5z"/></svg>`,
+  fog: `<svg ${ICON_ATTRS}><path d="M7 8.5a4.5 4.5 0 0 1 8.8-1.1 4 4 0 0 1 2.5 3.6M4 14h16M6 17.5h12M8 21h8"/></svg>`,
+  rain: `<svg ${ICON_ATTRS}><path d="M7.2 14.5a4.2 4.2 0 0 1-.6-8.3 5 5 0 0 1 9.6-1.2 4.6 4.6 0 0 1-.9 9.5z"/><path d="M8.5 17.5 7.5 20M12.5 17.5l-1 2.5M16.5 17.5l-1 2.5"/></svg>`,
+  snow: `<svg ${ICON_ATTRS}><path d="M7.2 14.5a4.2 4.2 0 0 1-.6-8.3 5 5 0 0 1 9.6-1.2 4.6 4.6 0 0 1-.9 9.5z"/><path d="M8 18.2v.01M12 20v.01M16 18.2v.01M10 21v.01M14 17v.01"/></svg>`,
+  storm: `<svg ${ICON_ATTRS}><path d="M7.2 14.5a4.2 4.2 0 0 1-.6-8.3 5 5 0 0 1 9.6-1.2 4.6 4.6 0 0 1-.9 9.5z"/><path d="m12.5 13.5-2 3.5h3l-2 3.5"/></svg>`,
+};
+
+function iconFor(code: number): string {
+  if (code === 0) return WEATHER_ICONS.sun;
+  if (code <= 2) return WEATHER_ICONS.partly;
+  if (code === 3) return WEATHER_ICONS.cloud;
+  if (code === 45 || code === 48) return WEATHER_ICONS.fog;
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return WEATHER_ICONS.snow;
+  if (code >= 95) return WEATHER_ICONS.storm;
+  if (code >= 51) return WEATHER_ICONS.rain;
+  return WEATHER_ICONS.cloud;
+}
 
 function formatC(value: number | undefined): string {
   return value === undefined || !Number.isFinite(value) ? PLACEHOLDER : String(Math.round(value));
 }
 
 /**
- * Clock and temperatures over the slideshow. Ink is chosen per photo by the
- * slideshow (it knows what is behind the overlay); the whole thing hides on
- * the music screen, which carries no text at all.
+ * Slideshow overlay: clock, date and outdoor weather stacked at the top,
+ * CPU/GPU at the bottom. Ink is chosen per photo by the slideshow; the whole
+ * thing hides on the music screen, which carries no text at all.
  */
 export class InfoOverlay {
   readonly el: HTMLElement;
   private readonly clock: HTMLElement;
+  private readonly date: HTMLElement;
+  private readonly weather: HTMLElement;
+  private readonly weatherIcon: HTMLElement;
+  private readonly weatherTemp: HTMLElement;
   private readonly temps: HTMLElement;
   private readonly cpu: HTMLElement;
   private readonly gpu: HTMLElement;
   private settings: Settings;
   private timer: number;
   private shownTime = '';
+  private iconCode: number | null = null;
 
   constructor(settings: Settings) {
     this.settings = settings;
@@ -39,35 +59,33 @@ export class InfoOverlay {
     this.el.className = 'info';
     this.el.dataset.ink = 'light';
 
-    this.clock = document.createElement('div');
-    this.clock.className = 'info__clock';
+    this.clock = el('div', 'info__clock');
+    this.date = el('div', 'info__date');
 
-    this.temps = document.createElement('div');
-    this.temps.className = 'info__temps';
+    this.weather = el('div', 'info__weather');
+    this.weatherIcon = el('span', 'info__weather-icon');
+    this.weatherTemp = el('span', 'info__weather-temp');
+    this.weather.append(this.weatherIcon, this.weatherTemp);
+    this.weather.dataset.on = 'false';
 
-    this.cpu = this.createCell(CPU_ICON);
-    this.gpu = this.createCell(GPU_ICON);
+    this.temps = el('div', 'info__temps');
+    this.cpu = this.createCell('CPU');
+    this.gpu = this.createCell('GPU');
 
-    this.el.append(this.clock, this.temps);
+    this.el.append(this.clock, this.date, this.weather, this.temps);
     this.setEnabled(settings.telemetry.enabled);
 
     this.tick();
     this.timer = window.setInterval(() => this.tick(), 10_000);
   }
 
-  private createCell(icon: string): HTMLElement {
-    const cell = document.createElement('span');
-    cell.className = 'info__cell';
-
-    const glyph = document.createElement('span');
-    glyph.className = 'info__icon';
-    glyph.innerHTML = icon;
-
-    const value = document.createElement('span');
-    value.className = 'info__value';
+  private createCell(label: string): HTMLElement {
+    const cell = el('span', 'info__cell');
+    const name = el('span', 'info__label');
+    name.textContent = label;
+    const value = el('span', 'info__value');
     value.textContent = PLACEHOLDER;
-
-    cell.append(glyph, value);
+    cell.append(name, value);
     this.temps.append(cell);
     return value;
   }
@@ -78,6 +96,7 @@ export class InfoOverlay {
     if (text === this.shownTime) return;
     this.shownTime = text;
     this.clock.textContent = text;
+    this.date.textContent = `${now.getDate()}.${now.getMonth() + 1}.`;
   }
 
   update(t: Telemetry): void {
@@ -87,9 +106,19 @@ export class InfoOverlay {
     this.flag(this.gpu, t.gpuTempC, this.settings.telemetry.gpuWarnC);
   }
 
-  private flag(el: HTMLElement, value: number | undefined, threshold: number): void {
+  setWeather(now: WeatherNow | null): void {
+    this.weather.dataset.on = now ? 'true' : 'false';
+    if (!now) return;
+    this.weatherTemp.textContent = String(Math.round(now.tempC));
+    if (now.code !== this.iconCode) {
+      this.iconCode = now.code;
+      this.weatherIcon.innerHTML = iconFor(now.code);
+    }
+  }
+
+  private flag(node: HTMLElement, value: number | undefined, threshold: number): void {
     const warn = value !== undefined && Number.isFinite(value) && value >= threshold;
-    el.dataset.warn = warn ? 'true' : 'false';
+    node.dataset.warn = warn ? 'true' : 'false';
   }
 
   /** Called by the slideshow with the tone that stays readable on the photo. */
@@ -110,4 +139,10 @@ export class InfoOverlay {
     clearInterval(this.timer);
     this.el.remove();
   }
+}
+
+function el(tag: string, className: string): HTMLElement {
+  const node = document.createElement(tag);
+  node.className = className;
+  return node;
 }

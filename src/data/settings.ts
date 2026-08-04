@@ -21,6 +21,12 @@ export interface Settings {
     cpuWarnC: number;
     gpuWarnC: number;
   };
+  weather: {
+    /** Empty place means weather is off. */
+    place: string;
+    lat: number;
+    lon: number;
+  };
 }
 
 export const DEFAULTS: Settings = {
@@ -39,6 +45,11 @@ export const DEFAULTS: Settings = {
     enabled: true,
     cpuWarnC: 85,
     gpuWarnC: 83,
+  },
+  weather: {
+    place: '',
+    lat: 0,
+    lon: 0,
   },
 };
 

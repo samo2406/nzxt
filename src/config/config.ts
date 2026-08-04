@@ -1,5 +1,6 @@
 import { getSettings, updateSettings } from '../data/settings';
 import { redirectUri } from '../data/spotify';
+import { geocode } from '../data/weather';
 import '../styles/config.css';
 import { formatSeconds, rangeField, toggleField } from './controls';
 import { el, section } from './dom';
@@ -62,6 +63,61 @@ function telemetryPanel(): HTMLElement {
   );
 }
 
+function weatherPanel(): HTMLElement {
+  const input = el('input', {
+    class: 'text-input',
+    type: 'text',
+    placeholder: 'napr. Bratislava',
+    spellcheck: 'false',
+  }) as HTMLInputElement;
+  input.value = getSettings().weather.place;
+
+  const status = el('span', { class: 'status' });
+  const search = el('button', { class: 'btn', type: 'button', text: 'Nastaviť' });
+  const clear = el('button', { class: 'btn', type: 'button', text: 'Vypnúť' });
+
+  const render = (): void => {
+    const w = getSettings().weather;
+    status.dataset.tone = w.place ? 'ok' : 'idle';
+    status.textContent = w.place ? `Zobrazuje sa počasie pre ${w.place}` : 'Vypnuté';
+  };
+
+  search.addEventListener('click', async () => {
+    const place = input.value.trim();
+    if (!place) return;
+    status.dataset.tone = 'idle';
+    status.textContent = 'Hľadám…';
+    try {
+      const hit = await geocode(place);
+      if (!hit) {
+        status.dataset.tone = 'warn';
+        status.textContent = 'Miesto sa nenašlo.';
+        return;
+      }
+      updateSettings({ weather: { place: hit.name, lat: hit.lat, lon: hit.lon } });
+      input.value = hit.name;
+      render();
+    } catch {
+      status.dataset.tone = 'warn';
+      status.textContent = 'Vyhľadávanie zlyhalo, skúste znova.';
+    }
+  });
+
+  clear.addEventListener('click', () => {
+    updateSettings({ weather: { place: '', lat: 0, lon: 0 } });
+    input.value = '';
+    render();
+  });
+
+  render();
+  return section(
+    'Počasie',
+    'Vonkajšia teplota pod hodinami, z Open-Meteo (bez API kľúča). Stačí zadať mesto.',
+    el('label', { class: 'field field--stack' }, el('span', { class: 'field__label', text: 'Mesto' }), input),
+    el('div', { class: 'row' }, search, clear, status),
+  );
+}
+
 function setupPanel(): HTMLElement {
   const steps = [
     'V CAM otvorte Lighting → Kraken → LCD Display.',
@@ -97,6 +153,7 @@ export function mountConfig(host: HTMLElement): void {
     new PhotoPanel().el,
     slideshowPanel(),
     telemetryPanel(),
+    weatherPanel(),
     setupPanel(),
   );
 
