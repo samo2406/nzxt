@@ -1,7 +1,13 @@
 import { loadImage } from '../core/image';
 
-const FALLBACK = '#6b7a8f';
+const FALLBACK: CoverAnalysis = { accent: '#6b7a8f', ink: 'light' };
 const SAMPLE = 16;
+
+export interface CoverAnalysis {
+  accent: string;
+  /** Ink that stays readable over the cover's outer region. */
+  ink: 'light' | 'dark';
+}
 
 interface Hsl {
   h: number;
@@ -28,11 +34,13 @@ function toHsl(r: number, g: number, b: number): Hsl {
 }
 
 /**
- * Picks a single accent from the cover for the glow and the progress arc.
- * A cross-origin failure here must never blank the screen, so every step is
- * guarded and the fallback is a neutral slate.
+ * Accent colour plus an ink choice for text drawn over the cover. The disc
+ * rotates under the text, so the ink is judged on the annulus that passes
+ * behind it — every rotation shows a different slice of that ring, never the
+ * centre. A cross-origin failure must never blank the screen, so every step
+ * is guarded and the fallback is a neutral slate with light ink.
  */
-export async function accentFrom(url: string): Promise<string> {
+export async function analyzeCover(url: string): Promise<CoverAnalysis> {
   try {
     const image = new Image();
     image.crossOrigin = 'anonymous';
@@ -52,9 +60,21 @@ export async function accentFrom(url: string): Promise<string> {
       peak: Hsl;
     }
     const buckets = new Map<number, Bucket>();
+    let ringLuma = 0;
+    let ringCount = 0;
+    const centre = (SAMPLE - 1) / 2;
 
     for (let i = 0; i < data.length; i += 4) {
       if (data[i + 3] < 128) continue;
+      const px = (i / 4) % SAMPLE;
+      const py = Math.floor(i / 4 / SAMPLE);
+      const radial = Math.hypot(px - centre, py - centre) / centre;
+      // The band the text actually sits over as the disc turns.
+      if (radial >= 0.4 && radial <= 0.95) {
+        ringLuma += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+        ringCount++;
+      }
+
       const hsl = toHsl(data[i], data[i + 1], data[i + 2]);
       // Near-black and near-white carry no usable hue.
       if (hsl.l < 0.12 || hsl.l > 0.94) continue;
@@ -79,11 +99,13 @@ export async function accentFrom(url: string): Promise<string> {
         best = bucket;
       }
     }
-    if (!best) return FALLBACK;
+
+    const ink = ringCount > 0 && ringLuma / ringCount / 255 > 0.55 ? 'dark' : 'light';
+    if (!best) return { ...FALLBACK, ink };
 
     const s = Math.min(0.9, Math.max(0.42, best.peak.s));
     const l = Math.min(0.66, Math.max(0.46, best.peak.l));
-    return `hsl(${best.peak.h.toFixed(0)} ${(s * 100).toFixed(0)}% ${(l * 100).toFixed(0)}%)`;
+    return { accent: `hsl(${best.peak.h.toFixed(0)} ${(s * 100).toFixed(0)}% ${(l * 100).toFixed(0)}%)`, ink };
   } catch {
     return FALLBACK;
   }

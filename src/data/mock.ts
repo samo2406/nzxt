@@ -40,11 +40,12 @@ const TRACKS: MockTrack[] = [
     palette: ['#0f2027', '#2c5364', '#f5d76e'],
   },
   {
+    // Bright cover on purpose: exercises the dark-ink flip.
     title: 'Slow Tide',
     artist: 'Halcyon Bay',
     durationMs: 187_000,
     isEpisode: false,
-    palette: ['#3a1c71', '#d76d77', '#ffaf7b'],
+    palette: ['#f4ead8', '#ffd9a0', '#e2725b'],
   },
   {
     title: 'Ep. 214 — On Cooling Loops',

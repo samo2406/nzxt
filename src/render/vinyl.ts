@@ -4,53 +4,25 @@ import { loadImage } from '../core/image';
 import { onTick } from '../core/ticker';
 import type { NowPlaying, PollResult } from '../data/player';
 import type { Settings } from '../data/settings';
-import { accentFrom } from './palette';
+import { analyzeCover } from './palette';
 import type { ScreenView } from './screen';
 import '../styles/vinyl.css';
 
 /** Layout is authored in a 640-space field that is centred and scaled by --u. */
 const DESIGN = 640;
-const DISC_CX = 320;
-const DISC_CY = 275;
-const ART_R = 174;
-const PIVOT_X = 512;
-const PIVOT_Y = 128;
-const ARM_LEN = 190;
-/** Stylus travel: outer edge of the artwork in to the label. */
-const TRACK_OUTER = ART_R * 0.95;
-const TRACK_INNER = ART_R * 0.36;
-const PARK_ANGLE = 84;
-
 const TITLE_Y = 478;
 const ARTIST_Y = 512;
 
 const POLL_MS = 3000;
 const RAMP_MS = 1600;
-const RESEAT_MS = 900;
-
-const PIVOT_TO_CENTRE = Math.hypot(PIVOT_X - DISC_CX, PIVOT_Y - DISC_CY);
-const BASE_ANGLE = (Math.atan2(DISC_CY - PIVOT_Y, DISC_CX - PIVOT_X) * 180) / Math.PI;
-
-/** Arm angle that puts the stylus `d` from the disc centre. */
-function armAngleFor(d: number): number {
-  const cos = (ARM_LEN * ARM_LEN + PIVOT_TO_CENTRE * PIVOT_TO_CENTRE - d * d) / (2 * ARM_LEN * PIVOT_TO_CENTRE);
-  const theta = (Math.acos(Math.min(1, Math.max(-1, cos))) * 180) / Math.PI;
-  return BASE_ANGLE - theta;
-}
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-
-function angleForProgress(fraction: number): number {
-  return armAngleFor(TRACK_OUTER + (TRACK_INNER - TRACK_OUTER) * clamp01(fraction));
-}
 
 export class VinylView implements ScreenView {
   readonly el: HTMLElement;
 
   private readonly spin: HTMLElement;
   private readonly art: [HTMLImageElement, HTMLImageElement];
-  private readonly glow: HTMLElement;
-  private readonly arm: HTMLElement;
   private readonly rimRight: HTMLElement;
   private readonly rimLeft: HTMLElement;
   private readonly title: HTMLElement;
@@ -70,8 +42,6 @@ export class VinylView implements ScreenView {
     this.el = document.createElement('div');
     this.el.className = 'vinyl';
 
-    this.glow = div('vinyl__glow');
-
     const field = div('vinyl__field');
     const disc = div('vinyl__disc');
     this.spin = div('vinyl__spin');
@@ -79,9 +49,6 @@ export class VinylView implements ScreenView {
     this.spin.append(this.art[0], this.art[1]);
 
     disc.append(this.spin, this.grooves(), div('vinyl__label'), div('vinyl__hole'), div('vinyl__sheen'), div('vinyl__edge'));
-
-    this.arm = div('vinyl__arm');
-    this.arm.append(div('vinyl__arm-pivot'), div('vinyl__arm-tube'), div('vinyl__arm-head'));
 
     const rim = div('vinyl__rim');
     this.rimRight = div('vinyl__rim-half vinyl__rim-half--r');
@@ -95,11 +62,10 @@ export class VinylView implements ScreenView {
     const text = div('vinyl__text');
     text.append(this.title, this.artist);
 
-    field.append(disc, this.arm, rim, text);
-    this.el.append(this.glow, field);
+    field.append(disc, rim, text);
+    this.el.append(field);
 
     this.clampText();
-    this.setArmAngle(PARK_ANGLE, 0);
     this.setProgressArc(0, 0);
   }
 
@@ -119,7 +85,7 @@ export class VinylView implements ScreenView {
   private grooves(): HTMLCanvasElement {
     const canvas = document.createElement('canvas');
     canvas.className = 'vinyl__grooves';
-    const size = Math.round(ART_R * 2 * this.metrics.unit);
+    const size = this.metrics.size;
     canvas.width = canvas.height = size;
 
     const g = canvas.getContext('2d');
@@ -157,7 +123,6 @@ export class VinylView implements ScreenView {
     const target = clamp01(fraction + step);
     const tween = now.seeked ? 0 : POLL_MS;
 
-    this.setArmAngle(angleForProgress(target), tween);
     this.setProgressArc(target, tween);
     this.setRate(now.isPlaying ? 1 : 0);
   }
@@ -168,9 +133,6 @@ export class VinylView implements ScreenView {
     this.artist.textContent = now.artist;
     this.el.dataset.episode = now.isEpisode ? 'true' : 'false';
 
-    // Lift and reseat rather than crawling back over a whole poll interval.
-    this.setArmAngle(PARK_ANGLE, RESEAT_MS);
-
     const token = ++this.artToken;
     const back = this.art[1 - this.artFront];
     const front = this.art[this.artFront];
@@ -178,7 +140,7 @@ export class VinylView implements ScreenView {
     if (!now.artUrl) {
       front.dataset.front = 'false';
       back.dataset.front = 'false';
-      this.setAccent('');
+      this.setLook('#6b7a8f', 'light');
       return;
     }
 
@@ -195,19 +157,14 @@ export class VinylView implements ScreenView {
         /* keep whatever is already on the disc */
       });
 
-    void accentFrom(now.artUrl).then((accent) => {
-      if (token === this.artToken) this.setAccent(accent);
+    void analyzeCover(now.artUrl).then(({ accent, ink }) => {
+      if (token === this.artToken) this.setLook(accent, ink);
     });
   }
 
-  private setAccent(accent: string): void {
-    this.el.style.setProperty('--accent', accent || '#6b7a8f');
-    this.glow.dataset.on = accent ? 'true' : 'false';
-  }
-
-  private setArmAngle(deg: number, durationMs: number): void {
-    this.arm.style.transition = durationMs > 0 ? `transform ${durationMs}ms linear` : 'none';
-    this.arm.style.transform = `rotate(${deg.toFixed(3)}deg)`;
+  private setLook(accent: string, ink: 'light' | 'dark'): void {
+    this.el.style.setProperty('--accent', accent);
+    this.el.dataset.ink = ink;
   }
 
   /** Two half-rings rotated into view: a pure transform, so the arc never
