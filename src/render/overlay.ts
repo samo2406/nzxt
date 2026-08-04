@@ -1,7 +1,6 @@
 import type { Telemetry } from '../data/nzxt';
 import type { Settings } from '../data/settings';
 import type { WeatherNow } from '../data/weather';
-import type { InkPair } from './slideshow';
 import '../styles/overlay.css';
 
 const PLACEHOLDER = '--';
@@ -36,8 +35,9 @@ function formatC(value: number | undefined): string {
 
 /**
  * Slideshow overlay: clock, date and outdoor weather stacked at the top,
- * CPU/GPU at the bottom. Ink is chosen per photo by the slideshow; the whole
- * thing hides on the music screen, which carries no text at all.
+ * CPU/GPU at the bottom. Text adapts to the photo per pixel via
+ * mix-blend-mode: difference in the stylesheet; the whole thing hides on the
+ * music screen, which carries no text at all.
  */
 export class InfoOverlay {
   readonly el: HTMLElement;
@@ -58,8 +58,6 @@ export class InfoOverlay {
     this.settings = settings;
     this.el = document.createElement('div');
     this.el.className = 'info';
-    this.el.dataset.inkTop = 'light';
-    this.el.dataset.inkBottom = 'light';
 
     this.clock = el('div', 'info__clock');
     this.date = el('div', 'info__date');
@@ -121,13 +119,6 @@ export class InfoOverlay {
   private flag(node: HTMLElement, value: number | undefined, threshold: number): void {
     const warn = value !== undefined && Number.isFinite(value) && value >= threshold;
     node.dataset.warn = warn ? 'true' : 'false';
-  }
-
-  /** Called by the slideshow: each text group gets the tone that stays
-   *  readable over its own band of the current photo. */
-  setInk(ink: InkPair): void {
-    this.el.dataset.inkTop = ink.top;
-    this.el.dataset.inkBottom = ink.bottom;
   }
 
   applySettings(settings: Settings): void {

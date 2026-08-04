@@ -10,6 +10,20 @@
   opacity: 0;
 }
 
+/* Per-pixel adaptation: white text in difference mode inverts whatever pixel
+   sits behind it — bright over dark, dark over bright, glyph by glyph, even
+   mid-crossfade. Composited on the GPU, so no per-frame CPU cost. Shadows
+   would be blended too, so none are used. Blend is set per leaf element so
+   the warning state can opt back out to a real colour. */
+.info__clock,
+.info__date,
+.info__weather-icon,
+.info__weather-temp,
+.info__label,
+.info__value {
+  mix-blend-mode: difference;
+}
+
 /* ---------------------------------------------------------------- top stack */
 
 .info__clock {
@@ -22,8 +36,7 @@
   line-height: 1;
   letter-spacing: 0.03em;
   font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  text-shadow: 0 calc(1px * var(--u)) calc(12px * var(--u)) rgba(0, 0, 0, 0.8);
+  color: #fff;
 }
 
 .info__date {
@@ -35,8 +48,7 @@
   font-size: calc(40px * var(--u));
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: var(--ink-dim);
-  text-shadow: 0 calc(1px * var(--u)) calc(9px * var(--u)) rgba(0, 0, 0, 0.8);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .info__weather {
@@ -59,8 +71,7 @@
   display: block;
   width: calc(44px * var(--u));
   height: calc(44px * var(--u));
-  color: var(--ink-dim);
-  filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(0, 0, 0, 0.7));
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .info__weather-icon svg {
@@ -74,8 +85,7 @@
   font-size: calc(44px * var(--u));
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(0, 0, 0, 0.8);
+  color: #fff;
 }
 
 .info__weather-temp::after {
@@ -111,18 +121,15 @@
 }
 
 .info__label {
-  color: var(--ink-faint);
+  color: rgba(255, 255, 255, 0.65);
   letter-spacing: 0.1em;
   font-size: calc(22px * var(--u));
-  text-shadow: 0 calc(1px * var(--u)) calc(8px * var(--u)) rgba(0, 0, 0, 0.8);
 }
 
 .info__value {
-  color: var(--ink);
+  color: #fff;
   font-size: calc(64px * var(--u));
   font-variant-numeric: tabular-nums;
-  transition: color 600ms ease;
-  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(0, 0, 0, 0.8);
 }
 
 .info__value::after {
@@ -130,40 +137,9 @@
   opacity: 0.5;
 }
 
+/* Warnings must be unmistakably orange, not an inversion artefact. */
 .info__value[data-warn='true'] {
-  color: #ffb26b;
-}
-
-/* --------------------------------------------------------------------- ink */
-
-/* Each group flips independently, judged on its own band of the photo;
-   shadows flip tone with the ink. */
-.info[data-ink-top='dark'] .info__clock,
-.info[data-ink-top='dark'] .info__weather-temp {
-  color: rgba(14, 14, 18, 0.94);
-  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(255, 255, 255, 0.65);
-}
-
-.info[data-ink-top='dark'] .info__date {
-  color: rgba(14, 14, 18, 0.6);
-  text-shadow: 0 calc(1px * var(--u)) calc(8px * var(--u)) rgba(255, 255, 255, 0.55);
-}
-
-.info[data-ink-top='dark'] .info__weather-icon {
-  color: rgba(14, 14, 18, 0.6);
-  filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(255, 255, 255, 0.55));
-}
-
-.info[data-ink-bottom='dark'] .info__value {
-  color: rgba(14, 14, 18, 0.94);
-  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(255, 255, 255, 0.65);
-}
-
-.info[data-ink-bottom='dark'] .info__label {
-  color: rgba(14, 14, 18, 0.6);
-  text-shadow: 0 calc(1px * var(--u)) calc(8px * var(--u)) rgba(255, 255, 255, 0.55);
-}
-
-.info[data-ink-bottom='dark'] .info__value[data-warn='true'] {
-  color: #b34700;
+  mix-blend-mode: normal;
+  color: #ff9b3d;
+  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(0, 0, 0, 0.7);
 }

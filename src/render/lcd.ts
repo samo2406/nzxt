@@ -59,7 +59,7 @@ export async function mountLcd(
   const weather = new WeatherSource((now) => overlay.setWeather(now));
   weather.sync(settings.weather);
 
-  const slideshow = new SlideshowView(settings, (ink) => overlay.setInk(ink));
+  const slideshow = new SlideshowView(settings);
   const vinyl = new VinylView(metrics, settings);
   screen.register('slideshow', slideshow);
   screen.register('spotify', vinyl);

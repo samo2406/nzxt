@@ -9,11 +9,6 @@ interface Slot {
   url: string | null;
 }
 
-export interface InkPair {
-  top: 'light' | 'dark';
-  bottom: 'light' | 'dark';
-}
-
 /**
  * Two stacked images crossfading on a timer. The next photo is decoded before
  * the fade starts so it never pops in, and every object URL is revoked once its
@@ -33,10 +28,7 @@ export class SlideshowView implements ScreenView {
   private settings: Settings;
   private readonly unsubscribe: () => void;
 
-  constructor(
-    settings: Settings,
-    private readonly onInk?: (ink: InkPair) => void,
-  ) {
+  constructor(settings: Settings) {
     this.settings = settings;
     this.el = document.createElement('div');
     this.el.className = 'slideshow';
@@ -74,7 +66,6 @@ export class SlideshowView implements ScreenView {
     this.photos = await listPhotos();
     this.queue = [];
     this.empty.dataset.on = this.photos.length === 0 ? 'true' : 'false';
-    if (this.photos.length === 0) this.onInk?.({ top: 'light', bottom: 'light' });
 
     // A first photo added while the LCD is already showing this screen should
     // appear straight away rather than after a full interval.
@@ -127,52 +118,12 @@ export class SlideshowView implements ScreenView {
       back.el.dataset.front = 'true';
       retired.el.dataset.front = 'false';
       this.front = 1 - this.front;
-      this.onInk?.(this.sampleInk(back.el));
       this.retire(retired);
     } catch (err) {
       console.error('[slideshow] could not show photo', err);
     } finally {
       if (url) URL.revokeObjectURL(url);
       this.advancing = false;
-    }
-  }
-
-  /**
-   * The overlay stacks text at the top (clock/date/weather) and the bottom
-   * (CPU/GPU), so each group's ink is judged on its own band of the same
-   * centre-square crop that object-fit: cover displays. Photos are same-origin
-   * blobs, so the canvas never taints; a decode oddity falls back to light
-   * ink on the shadowed side.
-   */
-  private sampleInk(img: HTMLImageElement): InkPair {
-    const fallback: InkPair = { top: 'light', bottom: 'light' };
-    try {
-      const S = 24;
-      const w = img.naturalWidth;
-      const h = img.naturalHeight;
-      if (!w || !h) return fallback;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = S;
-      const g = canvas.getContext('2d');
-      if (!g) return fallback;
-
-      const side = Math.min(w, h);
-      g.drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, S, S);
-
-      const inkOf = (fromRow: number, toRow: number): 'light' | 'dark' => {
-        const { data } = g.getImageData(0, fromRow, S, toRow - fromRow);
-        let luma = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          luma += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-        }
-        return luma / (data.length / 4) / 255 > 0.55 ? 'dark' : 'light';
-      };
-
-      // Bands the two text groups actually cover: ~4-36% and ~72-96%.
-      return { top: inkOf(1, Math.round(S * 0.36)), bottom: inkOf(Math.round(S * 0.72), Math.round(S * 0.96)) };
-    } catch {
-      return fallback;
     }
   }
 
