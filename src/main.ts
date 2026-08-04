@@ -9,6 +9,7 @@ import { installMonitoring } from './data/nzxt';
 import type { PlayerSource } from './data/player';
 import { getSettings, onSettingsChange } from './data/settings';
 import { Screen } from './render/screen';
+import { SlideshowView } from './render/slideshow';
 import { TelemetryOverlay } from './render/telemetry';
 
 async function bootLcd(): Promise<void> {
@@ -17,7 +18,7 @@ async function bootLcd(): Promise<void> {
   const metrics = readDisplayMetrics();
   configureTicker(metrics.targetFps);
 
-  let settings = getSettings();
+  const settings = getSettings();
   const screen = new Screen(document.body, metrics);
 
   const telemetry = new TelemetryOverlay(settings);
@@ -25,12 +26,16 @@ async function bootLcd(): Promise<void> {
   // Installed before the mock starts — the mock pushes through this same hook.
   installMonitoring((t) => telemetry.update(t));
 
+  const slideshow = new SlideshowView(settings);
+  screen.register('slideshow', slideshow);
+
   const state = new ScreenState(settings.spotify.fallbackMs);
   state.onChange((name) => screen.show(name));
+  screen.show('slideshow');
 
   onSettingsChange((next) => {
-    settings = next;
     telemetry.applySettings(next);
+    slideshow.applySettings(next);
     state.setFallbackMs(next.spotify.fallbackMs);
   });
 

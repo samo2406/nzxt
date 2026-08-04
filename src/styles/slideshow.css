@@ -1,0 +1,57 @@
+.slideshow {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+}
+
+.slideshow__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  /* Two slots only, so promoting both is bounded and deliberate. */
+  will-change: opacity;
+  transition: opacity var(--crossfade, 1200ms) ease-in-out;
+}
+
+.slideshow__img[data-front='true'] {
+  opacity: 1;
+}
+
+.slideshow[data-kenburns='true'] .slideshow__img[data-front='true'] {
+  animation: kenburns 26s ease-in-out infinite alternate;
+}
+
+@keyframes kenburns {
+  from {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.08) translate3d(-1.6%, 1.2%, 0);
+  }
+}
+
+.slideshow__empty {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: calc(360px * var(--u));
+  text-align: center;
+  font-size: calc(19px * var(--u));
+  color: var(--ink-faint);
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+
+.slideshow__empty[data-on='true'] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slideshow[data-kenburns='true'] .slideshow__img[data-front='true'] {
+    animation: none;
+  }
+}
