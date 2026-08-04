@@ -3,98 +3,14 @@ import './styles/fonts.css';
 
 import { readDisplayMetrics } from './core/display';
 import { isKrakenWindow, isMock } from './core/env';
-import { ScreenState } from './core/state';
 import { configureTicker } from './core/ticker';
-import { installMonitoring } from './data/nzxt';
-import type { PlayerSource } from './data/player';
-import { getSettings, onSettingsChange } from './data/settings';
-import { isConnected, onAuthChange, SpotifyPlayer } from './data/spotify';
-import { Screen } from './render/screen';
-import { SlideshowView } from './render/slideshow';
-import { TelemetryOverlay } from './render/telemetry';
-import { VinylView } from './render/vinyl';
+import { mountLcd } from './render/lcd';
 
 async function bootLcd(): Promise<void> {
   document.body.dataset.role = 'lcd';
-
   const metrics = readDisplayMetrics();
   configureTicker(metrics.targetFps);
-
-  const settings = getSettings();
-  const screen = new Screen(document.body, metrics);
-
-  const telemetry = new TelemetryOverlay(settings);
-  screen.overlay.append(telemetry.el);
-  // Installed before the mock starts — the mock pushes through this same hook.
-  installMonitoring((t) => telemetry.update(t));
-
-  const slideshow = new SlideshowView(settings);
-  const vinyl = new VinylView(metrics, settings);
-  screen.register('slideshow', slideshow);
-  screen.register('spotify', vinyl);
-
-  const state = new ScreenState(settings.spotify.fallbackMs);
-  state.onChange((name) => screen.show(name));
-  screen.show('slideshow');
-
-  onSettingsChange((next) => {
-    telemetry.applySettings(next);
-    slideshow.applySettings(next);
-    vinyl.applySettings(next);
-    state.setFallbackMs(next.spotify.fallbackMs);
-  });
-
-  if (isMock) {
-    const { startMock } = await import('./data/mock');
-    wirePlayer(startMock().player, state, vinyl);
-    return;
-  }
-
-  // The player is rebuilt whenever the connection or the client ID changes;
-  // the config window signals both over the bus.
-  let player: PlayerSource | null = null;
-  let signature = '';
-  const syncPlayer = (): void => {
-    const { clientId } = getSettings().spotify;
-    const next = isConnected() ? clientId : '';
-    if (next === signature) return;
-    signature = next;
-
-    player?.stop();
-    player = null;
-    if (!next) {
-      state.reset();
-      return;
-    }
-    player = new SpotifyPlayer(next);
-    wirePlayer(player, state, vinyl);
-  };
-
-  onAuthChange(syncPlayer);
-  onSettingsChange(syncPlayer);
-  syncPlayer();
-}
-
-function wirePlayer(player: PlayerSource, state: ScreenState, vinyl: VinylView): void {
-  player.onResult((result) => {
-    vinyl.update(result);
-    switch (result.kind) {
-      case 'track':
-        if (result.now.isPlaying) state.reportPlaying();
-        else state.reportIdle();
-        break;
-      case 'idle':
-        state.reportIdle();
-        break;
-      case 'unauthorized':
-        state.reset();
-        break;
-      case 'error':
-        // Hold the current screen; a dropped request is not "nothing playing".
-        break;
-    }
-  });
-  player.start();
+  await mountLcd(document.body, metrics, { mock: isMock });
 }
 
 async function bootConfig(): Promise<void> {

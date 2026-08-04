@@ -90,8 +90,8 @@ export function updateSettings(patch: SettingsPatch): Settings {
   } catch (err) {
     console.error('[settings] could not persist', err);
   }
+  // The bus delivers locally too, so the subscriber below does the notifying.
   publish({ type: BUS_TYPE });
-  notify();
   return current;
 }
 

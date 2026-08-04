@@ -72,6 +72,9 @@ export function publish(msg: BusMessage): void {
   } catch {
     /* private mode or quota; BroadcastChannel may still have carried it */
   }
+  // Neither channel notifies the window that sent the message, so the config
+  // window's own live preview would otherwise miss its own changes.
+  deliver(env);
 }
 
 export function subscribe(handler: Handler): () => void {

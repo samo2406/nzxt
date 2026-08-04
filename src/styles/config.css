@@ -195,6 +195,37 @@ body[data-role='config'] {
   outline-offset: 2px;
 }
 
+/* ----------------------------------------------------------------- preview */
+
+.preview {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 2px;
+}
+
+.preview__stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #050506;
+  box-shadow:
+    0 0 0 1px #2b3038,
+    0 14px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* ------------------------------------------------------------------- steps */
+
+.steps {
+  margin: 0 0 18px;
+  padding-left: 20px;
+  color: var(--ink-dim);
+  font-size: 13.5px;
+}
+
+.steps li {
+  margin: 5px 0;
+}
+
 .field--stack {
   display: block;
   border-top: none;
