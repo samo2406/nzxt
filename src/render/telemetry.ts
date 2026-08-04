@@ -15,7 +15,7 @@ function formatC(value: number | undefined): string {
 export class TelemetryOverlay {
   readonly el: HTMLElement;
   private readonly cpu: HTMLElement;
-  private readonly liquid: HTMLElement;
+  private readonly gpu: HTMLElement;
   private settings: Settings;
 
   constructor(settings: Settings) {
@@ -24,7 +24,7 @@ export class TelemetryOverlay {
     this.el.className = 'telemetry';
 
     this.cpu = this.createCell('CPU');
-    this.liquid = this.createCell('LIQ');
+    this.gpu = this.createCell('GPU');
     this.setEnabled(settings.telemetry.enabled);
   }
 
@@ -47,9 +47,9 @@ export class TelemetryOverlay {
 
   update(t: Telemetry): void {
     this.cpu.textContent = formatC(t.cpuTempC);
-    this.liquid.textContent = formatC(t.liquidTempC);
+    this.gpu.textContent = formatC(t.gpuTempC);
     this.flag(this.cpu, t.cpuTempC, this.settings.telemetry.cpuWarnC);
-    this.flag(this.liquid, t.liquidTempC, this.settings.telemetry.liquidWarnC);
+    this.flag(this.gpu, t.gpuTempC, this.settings.telemetry.gpuWarnC);
   }
 
   private flag(el: HTMLElement, value: number | undefined, threshold: number): void {

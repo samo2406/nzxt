@@ -13,7 +13,8 @@ import type { NowPlaying, PlayerSource, PollResult } from './player';
  *   t      force a temperature spike now
  */
 
-const POLL_MS = 3000;
+/** Matches the real poller's cadence. */
+const POLL_MS = 2000;
 const MONITOR_MS = 1000;
 
 interface MockTrack {

@@ -55,6 +55,8 @@ export class Screen {
 
     const prev = this.active ? this.views.get(this.active) : undefined;
     this.active = name;
+    // Lets the overlay style itself per screen (telemetry hides on music).
+    this.root.dataset.screen = name;
 
     next.el.dataset.active = 'true';
     next.activate();

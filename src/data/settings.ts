@@ -19,7 +19,7 @@ export interface Settings {
   telemetry: {
     enabled: boolean;
     cpuWarnC: number;
-    liquidWarnC: number;
+    gpuWarnC: number;
   };
 }
 
@@ -38,7 +38,7 @@ export const DEFAULTS: Settings = {
   telemetry: {
     enabled: true,
     cpuWarnC: 85,
-    liquidWarnC: 45,
+    gpuWarnC: 83,
   },
 };
 

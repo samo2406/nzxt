@@ -5,8 +5,8 @@ A custom screen for the 2.72" round LCD on an NZXT Kraken Elite V2, running thro
 Three states on one page:
 
 - **Slideshow** — your own photos, crossfading. They are stored in the browser and never leave the machine.
-- **Now playing** — the album art becomes a full-screen rotating record, with progress as a hairline arc riding the outer rim. Text colour adapts to the artwork. Takes over automatically when something plays; falls back to the slideshow a configurable delay after it stops.
-- **Temperatures** — a quiet monospace readout of CPU and coolant temperature at the bottom of the circle. Toggleable.
+- **Now playing** — the album art becomes a full-screen rotating record, with progress as a hairline arc riding the outer rim and no text anywhere. Takes over automatically when something plays; falls back to the slideshow a configurable delay after it stops.
+- **Temperatures** — a monospace readout of CPU and GPU temperature at the bottom of the circle, shown on the slideshow only; the music screen carries no text at all. Toggleable.
 
 The configuration window is in Slovak. Code, comments and commits are in English.
 
@@ -90,9 +90,7 @@ src/
 
 A few decisions worth knowing about, because they are load-bearing rather than stylistic:
 
-**The music screen does no per-frame JavaScript.** Rotation is a Web Animations infinite rotate whose speed is changed through `playbackRate`, so it stays on the compositor and never jumps phase. The progress arc is set once per three-second poll with a linear transition aimed one interval ahead — the tween *is* the progress interpolation. The arc is two rotated half-rings rather than an animated `stroke-dashoffset`, which would repaint the whole panel every frame. Measured on the settled screen: zero DOM mutations from the disc over seven seconds.
-
-**Text over rotating artwork picks its own colour.** The disc turns under the title, so the ink is chosen from the average luminance of the annulus that passes behind the text — not the patch momentarily under it — flipping to dark ink on bright covers, with an opposite-tone shadow as insurance.
+**The music screen does no per-frame JavaScript.** Rotation is a Web Animations infinite rotate whose speed is changed through `playbackRate`, so it stays on the compositor and never jumps phase. The progress arc is set once per two-second poll with a linear transition aimed one interval ahead — the tween *is* the progress interpolation. The arc is two rotated half-rings rather than an animated `stroke-dashoffset`, which would repaint the whole panel every frame. Measured on the settled screen: zero DOM mutations from the disc over seven seconds.
 
 **The hidden window may not composite.** In that state `requestAnimationFrame` can be starved and `HTMLImageElement.decode()` can stay pending forever — both observed, not theorised. The ticker watches for starvation and falls back to a timer, and image loading is gated on `load` with `decode()` raced against a small budget.
 

@@ -12,7 +12,9 @@ const VERIFIER_KEY = 'kraken-lcd:spotify-verifier';
 const MUTEX_KEY = 'kraken-lcd:spotify-refresh';
 const BUS_TYPE = 'spotify-auth';
 
-const POLL_MS = 3000;
+/** Spotify has no push API for playback state, so reaction latency is bounded
+ *  by this cadence. 2s keeps a lone user far inside the rate budget. */
+const POLL_MS = 2000;
 /** Refresh this far ahead of expiry rather than on a 401. */
 const REFRESH_LEAD_MS = 60_000;
 const MUTEX_TTL_MS = 15_000;

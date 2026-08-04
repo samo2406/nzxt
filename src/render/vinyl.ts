@@ -1,19 +1,15 @@
-import { safeHalfWidth, type DisplayMetrics } from '../core/display';
+import { type DisplayMetrics } from '../core/display';
 import { prefersReducedMotion } from '../core/env';
 import { loadImage } from '../core/image';
 import { onTick } from '../core/ticker';
 import type { NowPlaying, PollResult } from '../data/player';
 import type { Settings } from '../data/settings';
-import { analyzeCover } from './palette';
+import { accentFrom } from './palette';
 import type { ScreenView } from './screen';
 import '../styles/vinyl.css';
 
-/** Layout is authored in a 640-space field that is centred and scaled by --u. */
-const DESIGN = 640;
-const TITLE_Y = 478;
-const ARTIST_Y = 512;
-
-const POLL_MS = 3000;
+/** Must match the poller cadence: the arc tween aims one poll ahead. */
+const POLL_MS = 2000;
 const RAMP_MS = 1600;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -25,8 +21,6 @@ export class VinylView implements ScreenView {
   private readonly art: [HTMLImageElement, HTMLImageElement];
   private readonly rimRight: HTMLElement;
   private readonly rimLeft: HTMLElement;
-  private readonly title: HTMLElement;
-  private readonly artist: HTMLElement;
 
   private spinAnim: Animation | null = null;
   private stopRamp: (() => void) | null = null;
@@ -57,29 +51,10 @@ export class VinylView implements ScreenView {
     this.rimLeft.append(div('vinyl__rim-fill'));
     rim.append(div('vinyl__rim-track'), this.rimRight, this.rimLeft);
 
-    this.title = div('vinyl__title');
-    this.artist = div('vinyl__artist');
-    const text = div('vinyl__text');
-    text.append(this.title, this.artist);
-
-    field.append(disc, rim, text);
+    field.append(disc, rim);
     this.el.append(field);
 
-    this.clampText();
     this.setProgressArc(0, 0);
-  }
-
-  /** Each line is clipped to the chord of the safe circle at its own baseline,
-   *  so a long title cannot reach the steep-angle ring. */
-  private clampText(): void {
-    const m = this.metrics;
-    for (const [node, y] of [
-      [this.title, TITLE_Y],
-      [this.artist, ARTIST_Y],
-    ] as const) {
-      const absolute = m.cy + (y - DESIGN / 2) * m.unit;
-      node.style.maxWidth = `${Math.round(safeHalfWidth(m, absolute) * 2 * 0.94)}px`;
-    }
   }
 
   private grooves(): HTMLCanvasElement {
@@ -129,9 +104,6 @@ export class VinylView implements ScreenView {
 
   private loadTrack(now: NowPlaying): void {
     this.trackId = now.id;
-    this.title.textContent = now.title;
-    this.artist.textContent = now.artist;
-    this.el.dataset.episode = now.isEpisode ? 'true' : 'false';
 
     const token = ++this.artToken;
     const back = this.art[1 - this.artFront];
@@ -140,7 +112,7 @@ export class VinylView implements ScreenView {
     if (!now.artUrl) {
       front.dataset.front = 'false';
       back.dataset.front = 'false';
-      this.setLook('#6b7a8f', 'light');
+      this.el.style.setProperty('--accent', '#6b7a8f');
       return;
     }
 
@@ -157,14 +129,9 @@ export class VinylView implements ScreenView {
         /* keep whatever is already on the disc */
       });
 
-    void analyzeCover(now.artUrl).then(({ accent, ink }) => {
-      if (token === this.artToken) this.setLook(accent, ink);
+    void accentFrom(now.artUrl).then((accent) => {
+      if (token === this.artToken) this.el.style.setProperty('--accent', accent);
     });
-  }
-
-  private setLook(accent: string, ink: 'light' | 'dark'): void {
-    this.el.style.setProperty('--accent', accent);
-    this.el.dataset.ink = ink;
   }
 
   /** Two half-rings rotated into view: a pure transform, so the arc never

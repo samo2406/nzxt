@@ -130,13 +130,12 @@
   }
 }
 
-/* Vignette doubles as legibility: it darkens the band the text sits over. */
 .vinyl__edge {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   box-shadow:
-    inset 0 0 calc(90px * var(--u)) rgba(0, 0, 0, 0.5),
+    inset 0 0 calc(40px * var(--u)) rgba(0, 0, 0, 0.45),
     inset 0 0 0 calc(1.5px * var(--u)) rgba(255, 255, 255, 0.08);
 }
 
@@ -190,61 +189,6 @@
 .vinyl__rim-half--l .vinyl__rim-fill {
   left: 0;
   clip-path: inset(0 50% 0 0);
-}
-
-/* ------------------------------------------------------------------ text */
-
-.vinyl__text {
-  position: absolute;
-  left: 50%;
-  top: 71.6%;
-  width: 100%;
-  transform: translateX(-50%);
-  text-align: center;
-}
-
-.vinyl__title {
-  margin: 0 auto;
-  font-size: calc(27px * var(--u));
-  font-weight: 560;
-  line-height: 1.2;
-  letter-spacing: -0.012em;
-  color: var(--ink);
-  text-shadow:
-    0 calc(1px * var(--u)) calc(14px * var(--u)) rgba(0, 0, 0, 0.75),
-    0 0 calc(3px * var(--u)) rgba(0, 0, 0, 0.6);
-  /* Wrap at a fixed size rather than shrinking to one line: two legible lines
-     beat one unreadable one. */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  text-wrap: balance;
-}
-
-.vinyl__artist {
-  margin: calc(9px * var(--u)) auto 0;
-  font-size: calc(18px * var(--u));
-  font-weight: 400;
-  line-height: 1.2;
-  color: var(--ink-dim);
-  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(0, 0, 0, 0.75);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Bright covers flip the ink; the shadow flips with it. */
-.vinyl[data-ink='dark'] .vinyl__title {
-  color: rgba(14, 14, 18, 0.94);
-  text-shadow:
-    0 calc(1px * var(--u)) calc(14px * var(--u)) rgba(255, 255, 255, 0.6),
-    0 0 calc(3px * var(--u)) rgba(255, 255, 255, 0.5);
-}
-
-.vinyl[data-ink='dark'] .vinyl__artist {
-  color: rgba(14, 14, 18, 0.66);
-  text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(255, 255, 255, 0.55);
 }
 
 @media (prefers-reduced-motion: reduce) {
