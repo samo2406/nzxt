@@ -15,10 +15,10 @@
 .info__clock {
   position: absolute;
   left: 50%;
-  top: 14.5%;
+  top: 12.5%;
   transform: translate(-50%, -50%);
   font-family: var(--font-mono);
-  font-size: calc(64px * var(--u));
+  font-size: calc(76px * var(--u));
   line-height: 1;
   letter-spacing: 0.03em;
   font-variant-numeric: tabular-nums;
@@ -29,10 +29,10 @@
 .info__date {
   position: absolute;
   left: 50%;
-  top: 23%;
+  top: 21.5%;
   transform: translate(-50%, -50%);
   font-family: var(--font-mono);
-  font-size: calc(27px * var(--u));
+  font-size: calc(40px * var(--u));
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--ink-dim);
@@ -42,7 +42,7 @@
 .info__weather {
   position: absolute;
   left: 50%;
-  top: 31%;
+  top: 29.5%;
   transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
@@ -57,8 +57,8 @@
 
 .info__weather-icon {
   display: block;
-  width: calc(36px * var(--u));
-  height: calc(36px * var(--u));
+  width: calc(44px * var(--u));
+  height: calc(44px * var(--u));
   color: var(--ink-dim);
   filter: drop-shadow(0 calc(1px * var(--u)) calc(4px * var(--u)) rgba(0, 0, 0, 0.7));
 }
@@ -71,7 +71,7 @@
 
 .info__weather-temp {
   font-family: var(--font-mono);
-  font-size: calc(36px * var(--u));
+  font-size: calc(44px * var(--u));
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
@@ -88,7 +88,7 @@
 .info__temps {
   position: absolute;
   left: 50%;
-  top: 80.5%;
+  top: 81.5%;
   transform: translate(-50%, -50%);
   display: flex;
   gap: calc(28px * var(--u));
@@ -113,13 +113,13 @@
 .info__label {
   color: var(--ink-faint);
   letter-spacing: 0.1em;
-  font-size: calc(19px * var(--u));
+  font-size: calc(22px * var(--u));
   text-shadow: 0 calc(1px * var(--u)) calc(8px * var(--u)) rgba(0, 0, 0, 0.8);
 }
 
 .info__value {
   color: var(--ink);
-  font-size: calc(56px * var(--u));
+  font-size: calc(64px * var(--u));
   font-variant-numeric: tabular-nums;
   transition: color 600ms ease;
   text-shadow: 0 calc(1px * var(--u)) calc(10px * var(--u)) rgba(0, 0, 0, 0.8);
