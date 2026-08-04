@@ -1,3 +1,4 @@
+import { loadImage } from '../core/image';
 import { getPhotoBlob, listPhotos, onPhotosChange, type PhotoMeta } from '../data/photos';
 import type { Settings } from '../data/settings';
 import type { ScreenView } from './screen';
@@ -107,9 +108,8 @@ export class SlideshowView implements ScreenView {
 
       const back = this.slots[1 - this.front];
       url = URL.createObjectURL(blob);
-      back.el.src = url;
       back.el.dataset.photoId = id;
-      await back.el.decode();
+      await loadImage(back.el, url);
       if (!this.active && this.slots[this.front].url) return;
 
       const retired = this.slots[this.front];

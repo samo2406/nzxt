@@ -1,0 +1,322 @@
+.vinyl {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 38%, #0b0c10 0%, #050506 62%);
+}
+
+/* Field is a 640-space square, centred, so every child below can be authored
+   in the design coordinates regardless of the panel's real size. */
+.vinyl__field {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(640px * var(--u));
+  height: calc(640px * var(--u));
+  transform: translate(-50%, -50%);
+}
+
+/* ------------------------------------------------------------------- glow */
+
+.vinyl__glow {
+  position: absolute;
+  inset: 0;
+  background-color: var(--accent);
+  opacity: 0;
+  /* A solid colour behind a static mask, so the accent can transition
+     smoothly — a gradient's colour stops cannot. */
+  -webkit-mask-image: radial-gradient(circle at 50% 43%, #000 0%, transparent 58%);
+  mask-image: radial-gradient(circle at 50% 43%, #000 0%, transparent 58%);
+  transition:
+    background-color 900ms ease,
+    opacity 900ms ease;
+}
+
+.vinyl__glow[data-on='true'] {
+  opacity: 0.2;
+}
+
+/* ------------------------------------------------------------------- disc */
+
+.vinyl__disc {
+  position: absolute;
+  left: 50%;
+  top: 42.97%;
+  width: 54.375%;
+  height: 54.375%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  overflow: hidden;
+  background: #0a0a0c;
+  box-shadow:
+    0 calc(10px * var(--u)) calc(30px * var(--u)) rgba(0, 0, 0, 0.55),
+    0 0 calc(2px * var(--u)) rgba(255, 255, 255, 0.06);
+}
+
+.vinyl__spin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  /* The one element that moves per frame; promoted deliberately. */
+  will-change: transform;
+}
+
+/* A faint off-centre sweep so rotation still reads on flat or symmetric art. */
+.vinyl__spin::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 210deg,
+    rgba(255, 255, 255, 0) 0deg,
+    rgba(255, 255, 255, 0.07) 40deg,
+    rgba(255, 255, 255, 0) 95deg,
+    rgba(0, 0, 0, 0.14) 200deg,
+    rgba(255, 255, 255, 0) 300deg
+  );
+}
+
+.vinyl__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+
+.vinyl__art[data-front='true'] {
+  opacity: 1;
+}
+
+.vinyl__grooves {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  opacity: 0.75;
+  /* Concentric rings look identical rotated, so they stay off the spinning
+     layer and cost nothing. */
+  pointer-events: none;
+}
+
+.vinyl__label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 33%;
+  height: 33%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 calc(1px * var(--u)) rgba(255, 255, 255, 0.16),
+    0 0 calc(14px * var(--u)) rgba(0, 0, 0, 0.4);
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.22) 0%, rgba(0, 0, 0, 0) 70%);
+}
+
+.vinyl__hole {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4.6%;
+  height: 4.6%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #050506;
+  box-shadow: inset 0 0 0 calc(1px * var(--u)) rgba(255, 255, 255, 0.1);
+}
+
+/* Specular band belongs to the room's light, not the record, so it holds
+   still while the disc turns under it. */
+.vinyl__sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(
+    118deg,
+    rgba(255, 255, 255, 0) 34%,
+    rgba(255, 255, 255, 0.09) 47%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.05) 54%,
+    rgba(255, 255, 255, 0) 66%
+  );
+  animation: sheen-drift 19s ease-in-out infinite alternate;
+}
+
+@keyframes sheen-drift {
+  from {
+    transform: rotate(-2.5deg);
+  }
+  to {
+    transform: rotate(2.5deg);
+  }
+}
+
+.vinyl__edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 calc(18px * var(--u)) rgba(0, 0, 0, 0.55),
+    inset 0 0 0 calc(1.5px * var(--u)) rgba(255, 255, 255, 0.08);
+}
+
+/* ------------------------------------------------------------------- arm */
+
+.vinyl__arm {
+  position: absolute;
+  left: 80%;
+  top: 20%;
+  width: calc(190px * var(--u));
+  height: calc(16px * var(--u));
+  margin-top: calc(-8px * var(--u));
+  transform-origin: 0 50%;
+  will-change: transform;
+}
+
+.vinyl__arm-pivot {
+  position: absolute;
+  left: calc(-11px * var(--u));
+  top: 50%;
+  width: calc(22px * var(--u));
+  height: calc(22px * var(--u));
+  margin-top: calc(-11px * var(--u));
+  border-radius: 50%;
+  background: linear-gradient(150deg, #4a4d55, #23252b);
+  box-shadow: 0 calc(2px * var(--u)) calc(6px * var(--u)) rgba(0, 0, 0, 0.6);
+}
+
+.vinyl__arm-tube {
+  position: absolute;
+  left: calc(6px * var(--u));
+  top: 50%;
+  right: calc(16px * var(--u));
+  height: calc(4px * var(--u));
+  margin-top: calc(-2px * var(--u));
+  border-radius: calc(2px * var(--u));
+  background: linear-gradient(180deg, #a9adb6, #5c6068);
+}
+
+.vinyl__arm-head {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: calc(20px * var(--u));
+  height: calc(11px * var(--u));
+  margin-top: calc(-5.5px * var(--u));
+  border-radius: calc(2px * var(--u));
+  background: linear-gradient(180deg, #d5d8de, #7d818a);
+  box-shadow: 0 calc(2px * var(--u)) calc(5px * var(--u)) rgba(0, 0, 0, 0.55);
+}
+
+/* -------------------------------------------------------------- rim gauge */
+
+.vinyl__rim,
+.vinyl__rim-track {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 93.75%;
+  height: 93.75%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
+.vinyl__rim-track {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  border: calc(4px * var(--u)) solid rgba(255, 255, 255, 0.07);
+}
+
+.vinyl__rim-half {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.vinyl__rim-half--r {
+  right: 0;
+}
+
+.vinyl__rim-half--l {
+  left: 0;
+}
+
+/* Each half holds a full ring with its far side clipped away; rotating that
+   ring sweeps the arc. Pure transform, so no per-frame repaint. */
+.vinyl__rim-fill {
+  position: absolute;
+  top: 0;
+  width: 200%;
+  height: 100%;
+  border: calc(4px * var(--u)) solid var(--accent);
+  border-radius: 50%;
+  transition: border-color 900ms ease;
+  will-change: transform;
+}
+
+.vinyl__rim-half--r .vinyl__rim-fill {
+  left: -100%;
+  clip-path: inset(0 0 0 50%);
+}
+
+.vinyl__rim-half--l .vinyl__rim-fill {
+  left: 0;
+  clip-path: inset(0 50% 0 0);
+}
+
+/* ------------------------------------------------------------------ text */
+
+.vinyl__text {
+  position: absolute;
+  left: 50%;
+  top: 71.6%;
+  width: 100%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.vinyl__title {
+  margin: 0 auto;
+  font-size: calc(27px * var(--u));
+  font-weight: 560;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
+  color: var(--ink);
+  /* Wrap at a fixed size rather than shrinking to one line: two legible lines
+     beat one unreadable one. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-wrap: balance;
+}
+
+.vinyl__artist {
+  margin: calc(9px * var(--u)) auto 0;
+  font-size: calc(18px * var(--u));
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vinyl__sheen {
+    animation: none;
+  }
+
+  .vinyl__art {
+    transition-duration: 1ms;
+  }
+}

@@ -12,6 +12,7 @@ import { isConnected, onAuthChange, SpotifyPlayer } from './data/spotify';
 import { Screen } from './render/screen';
 import { SlideshowView } from './render/slideshow';
 import { TelemetryOverlay } from './render/telemetry';
+import { VinylView } from './render/vinyl';
 
 async function bootLcd(): Promise<void> {
   document.body.dataset.role = 'lcd';
@@ -28,7 +29,9 @@ async function bootLcd(): Promise<void> {
   installMonitoring((t) => telemetry.update(t));
 
   const slideshow = new SlideshowView(settings);
+  const vinyl = new VinylView(metrics, settings);
   screen.register('slideshow', slideshow);
+  screen.register('spotify', vinyl);
 
   const state = new ScreenState(settings.spotify.fallbackMs);
   state.onChange((name) => screen.show(name));
@@ -37,12 +40,13 @@ async function bootLcd(): Promise<void> {
   onSettingsChange((next) => {
     telemetry.applySettings(next);
     slideshow.applySettings(next);
+    vinyl.applySettings(next);
     state.setFallbackMs(next.spotify.fallbackMs);
   });
 
   if (isMock) {
     const { startMock } = await import('./data/mock');
-    wirePlayer(startMock().player, state);
+    wirePlayer(startMock().player, state, vinyl);
     return;
   }
 
@@ -63,7 +67,7 @@ async function bootLcd(): Promise<void> {
       return;
     }
     player = new SpotifyPlayer(next);
-    wirePlayer(player, state);
+    wirePlayer(player, state, vinyl);
   };
 
   onAuthChange(syncPlayer);
@@ -71,8 +75,9 @@ async function bootLcd(): Promise<void> {
   syncPlayer();
 }
 
-function wirePlayer(player: PlayerSource, state: ScreenState): void {
+function wirePlayer(player: PlayerSource, state: ScreenState, vinyl: VinylView): void {
   player.onResult((result) => {
+    vinyl.update(result);
     switch (result.kind) {
       case 'track':
         if (result.now.isPlaying) state.reportPlaying();

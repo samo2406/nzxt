@@ -262,8 +262,13 @@ class MockPlayer implements PlayerSource {
 
   toggle(): void {
     this.advance();
-    this.stopped = false;
-    this.playing = !this.playing;
+    // Coming back from "nothing playing" should resume, not flip to paused.
+    if (this.stopped) {
+      this.stopped = false;
+      this.playing = true;
+    } else {
+      this.playing = !this.playing;
+    }
     this.emit();
   }
 
