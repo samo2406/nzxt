@@ -8,6 +8,7 @@ import { configureTicker } from './core/ticker';
 import { installMonitoring } from './data/nzxt';
 import type { PlayerSource } from './data/player';
 import { getSettings, onSettingsChange } from './data/settings';
+import { isConnected, onAuthChange, SpotifyPlayer } from './data/spotify';
 import { Screen } from './render/screen';
 import { SlideshowView } from './render/slideshow';
 import { TelemetryOverlay } from './render/telemetry';
@@ -42,7 +43,32 @@ async function bootLcd(): Promise<void> {
   if (isMock) {
     const { startMock } = await import('./data/mock');
     wirePlayer(startMock().player, state);
+    return;
   }
+
+  // The player is rebuilt whenever the connection or the client ID changes;
+  // the config window signals both over the bus.
+  let player: PlayerSource | null = null;
+  let signature = '';
+  const syncPlayer = (): void => {
+    const { clientId } = getSettings().spotify;
+    const next = isConnected() ? clientId : '';
+    if (next === signature) return;
+    signature = next;
+
+    player?.stop();
+    player = null;
+    if (!next) {
+      state.reset();
+      return;
+    }
+    player = new SpotifyPlayer(next);
+    wirePlayer(player, state);
+  };
+
+  onAuthChange(syncPlayer);
+  onSettingsChange(syncPlayer);
+  syncPlayer();
 }
 
 function wirePlayer(player: PlayerSource, state: ScreenState): void {
@@ -54,6 +80,9 @@ function wirePlayer(player: PlayerSource, state: ScreenState): void {
         break;
       case 'idle':
         state.reportIdle();
+        break;
+      case 'unauthorized':
+        state.reset();
         break;
       case 'error':
         // Hold the current screen; a dropped request is not "nothing playing".

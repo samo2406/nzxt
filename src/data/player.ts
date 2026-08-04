@@ -16,13 +16,20 @@ export interface NowPlaying {
   isEpisode: boolean;
   /** When `progressMs` was true, used to interpolate between polls. */
   sampledAt: number;
+  /**
+   * Position jumped further than playback alone explains. The renderer snaps
+   * instead of tweening, otherwise a seek crawls over a whole poll interval.
+   */
+  seeked: boolean;
 }
 
 export type PollResult =
   | { kind: 'track'; now: NowPlaying }
   /** Authoritative: nothing is loaded in the player. */
   | { kind: 'idle' }
-  /** Transport or auth failure — the caller must hold its current state. */
+  /** Authoritative: there is no usable authorisation any more. */
+  | { kind: 'unauthorized' }
+  /** Transport failure — the caller must hold its current state. */
   | { kind: 'error'; reason: string };
 
 export interface PlayerSource {

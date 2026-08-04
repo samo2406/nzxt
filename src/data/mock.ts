@@ -8,7 +8,7 @@ import type { NowPlaying, PlayerSource, PollResult } from './player';
  * Keys (mock only):
  *   space  play / pause          n  next track
  *   ← / →  seek ∓10s             s  stop (nothing playing → falls back to slideshow)
- *   e      toggle forced poll errors
+ *   e      toggle forced poll errors      u  toggle "authorisation revoked"
  *   d      toggle a degraded monitoring payload (missing fields)
  *   t      force a temperature spike now
  */
@@ -192,7 +192,9 @@ class MockPlayer implements PlayerSource {
   private playing = true;
   private stopped = false;
   private covers: string[] = [];
+  private seeked = true;
   forceError = false;
+  forceUnauthorized = false;
 
   constructor() {
     this.covers = TRACKS.map((t) => drawCover(t.palette));
@@ -225,6 +227,7 @@ class MockPlayer implements PlayerSource {
     if (this.progressMs >= duration) {
       this.progressMs = 0;
       this.index = (this.index + 1) % TRACKS.length;
+      this.seeked = true;
     }
   }
 
@@ -240,18 +243,21 @@ class MockPlayer implements PlayerSource {
       isPlaying: this.playing,
       isEpisode: track.isEpisode,
       sampledAt: performance.now(),
+      seeked: this.seeked,
     };
   }
 
   /** Emits on the poll cadence, and immediately after a key press. */
   private emit(): void {
     this.advance();
-    const result: PollResult = this.forceError
-      ? { kind: 'error', reason: 'mock forced error' }
-      : this.stopped
-        ? { kind: 'idle' }
-        : { kind: 'track', now: this.snapshot() };
+    let result: PollResult;
+    if (this.forceUnauthorized) result = { kind: 'unauthorized' };
+    else if (this.forceError) result = { kind: 'error', reason: 'mock forced error' };
+    else if (this.stopped) result = { kind: 'idle' };
+    else result = { kind: 'track', now: this.snapshot() };
+
     for (const fn of this.listeners) fn(result);
+    this.seeked = false;
   }
 
   toggle(): void {
@@ -265,6 +271,7 @@ class MockPlayer implements PlayerSource {
     this.index = (this.index + 1) % TRACKS.length;
     this.progressMs = 0;
     this.stopped = false;
+    this.seeked = true;
     this.lastAdvance = performance.now();
     this.emit();
   }
@@ -273,6 +280,7 @@ class MockPlayer implements PlayerSource {
     this.advance();
     const duration = TRACKS[this.index].durationMs;
     this.progressMs = Math.min(Math.max(this.progressMs + deltaMs, 0), duration - 1000);
+    this.seeked = true;
     this.emit();
   }
 
@@ -318,6 +326,10 @@ export function startMock(): MockHarness {
       case 'e':
         player.forceError = !player.forceError;
         console.info('[mock] forced errors', player.forceError);
+        break;
+      case 'u':
+        player.forceUnauthorized = !player.forceUnauthorized;
+        console.info('[mock] authorisation revoked', player.forceUnauthorized);
         break;
       case 'd':
         monitor.degraded = !monitor.degraded;

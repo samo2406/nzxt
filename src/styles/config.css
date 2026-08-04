@@ -195,6 +195,53 @@ body[data-role='config'] {
   outline-offset: 2px;
 }
 
+.field--stack {
+  display: block;
+  border-top: none;
+  padding-top: 0;
+}
+
+.field--stack .field__label {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.text-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: #0c0d10;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.text-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0 4px;
+}
+
+.status {
+  font-size: 13.5px;
+  color: var(--ink-dim);
+}
+
+.status[data-tone='ok'] {
+  color: #6ee7a8;
+}
+
+.status[data-tone='warn'] {
+  color: #ffb26b;
+}
+
 /* ------------------------------------------------------------------ photos */
 
 .photos__input {

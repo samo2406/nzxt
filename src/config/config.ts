@@ -4,6 +4,7 @@ import '../styles/config.css';
 import { formatSeconds, rangeField, toggleField } from './controls';
 import { el, section } from './dom';
 import { PhotoPanel } from './photos-panel';
+import { SpotifyPanel } from './spotify-panel';
 
 function copyField(value: string): HTMLElement {
   const input = el('input', { class: 'copy__value', readonly: true, spellcheck: 'false' }) as HTMLInputElement;
@@ -59,6 +60,7 @@ export function mountConfig(host: HTMLElement): void {
       'Skopírujte ju do Spotify Developer Dashboard → Redirect URIs. Musí sedieť úplne presne, vrátane lomky na konci.',
       copyField(redirectUri()),
     ),
+    new SpotifyPanel().el,
     new PhotoPanel().el,
     slideshowPanel(),
   );
