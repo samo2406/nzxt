@@ -1,0 +1,46 @@
+.telemetry {
+  position: absolute;
+  left: 50%;
+  top: 86.5%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: calc(18px * var(--u));
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: calc(16px * var(--u));
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.telemetry[data-on='true'] {
+  opacity: 1;
+}
+
+.telemetry__cell {
+  display: inline-flex;
+  gap: calc(6px * var(--u));
+  align-items: baseline;
+}
+
+.telemetry__label {
+  color: var(--ink-faint);
+  letter-spacing: 0.1em;
+  font-size: calc(13px * var(--u));
+}
+
+.telemetry__value {
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+  transition: color 600ms ease;
+}
+
+.telemetry__value::after {
+  content: '°';
+  opacity: 0.45;
+}
+
+.telemetry__value[data-warn='true'] {
+  color: #ffb26b;
+}

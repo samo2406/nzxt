@@ -1,0 +1,61 @@
+.screen {
+  --bg: #050506;
+  --ink: #f3f3f5;
+  --ink-dim: rgba(243, 243, 245, 0.55);
+  --ink-faint: rgba(243, 243, 245, 0.32);
+  --accent: #6b7a8f;
+
+  position: relative;
+  width: var(--w);
+  height: var(--h);
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.screen[data-shape='circle'] {
+  clip-path: circle(50% at 50% 50%);
+}
+
+.screen__stage,
+.screen__overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.screen__overlay {
+  pointer-events: none;
+}
+
+.view {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
+.view[data-active='true'] {
+  opacity: 1;
+}
+
+.screen__boot {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: calc(15px * var(--u));
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  transition: opacity 400ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view {
+    transition-duration: 1ms;
+  }
+}
