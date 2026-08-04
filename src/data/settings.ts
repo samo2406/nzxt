@@ -33,7 +33,7 @@ export const DEFAULTS: Settings = {
   spotify: {
     clientId: '',
     fallbackMs: 20_000,
-    rotationRpm: 8,
+    rotationRpm: 6,
   },
   telemetry: {
     enabled: true,
