@@ -5,7 +5,8 @@ import type { AssistantMessage, AssistantSource, FaceState } from './assistant';
  * agent's WebSocket sends, so the face can be built without a mic or CAM.
  *
  * Keys: 1 sleeping · 2 listening · 3 thinking · 4 speaking · 5 offline
- *       6 alarm · 7 error · w a whole conversation turn
+ *       6 alarm · 7 error · 8 shutdown countdown · 9 restart countdown
+ *       w a whole conversation turn
  */
 
 const FRAME_MS = 20;
@@ -126,6 +127,11 @@ export class MockAssistant implements AssistantSource {
       case '7':
         this.clear();
         this.state('error', { reason: 'broken' });
+        break;
+      case '8':
+      case '9':
+        this.clear();
+        this.state('countdown', { until: Date.now() + 10_000, restart: ev.key === '9' });
         break;
       case 'w':
         this.turn();

@@ -211,6 +211,122 @@
   transform: scaleY(0.6);
 }
 
+/* --------------------------------------------------------------- countdown */
+
+.face[data-state='countdown'] {
+  --face-accent: #ff6b8a;
+}
+
+.face[data-state='countdown'][data-restart='true'] {
+  --face-accent: #5ce1e6;
+}
+
+.face__progress {
+  position: absolute;
+  inset: 3.5%;
+  width: 93%;
+  height: 93%;
+  transform: rotate(-90deg) scaleY(-1);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+}
+
+.face__progress circle {
+  fill: none;
+  stroke: var(--face-accent);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  filter: drop-shadow(0 0 1.5px var(--face-accent));
+}
+
+.face__count,
+.face__count-label {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 300ms ease,
+    top 500ms var(--face-spring),
+    font-size 500ms ease;
+}
+
+.face__count {
+  top: 65%;
+  font-family: var(--font-ui);
+  font-size: calc(190px * var(--u));
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--face-ink);
+  text-shadow: 0 0 calc(30px * var(--u)) color-mix(in srgb, var(--face-accent) 70%, transparent);
+}
+
+.face__count span {
+  display: inline-block;
+}
+
+.face__count-label {
+  top: 85%;
+  font-family: var(--font-ui);
+  font-size: calc(30px * var(--u));
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--face-accent);
+}
+
+.face[data-state='countdown'] :is(.face__progress, .face__count, .face__count-label) {
+  opacity: 1;
+}
+
+.face[data-state='countdown'] .face__ring {
+  opacity: 0.12;
+}
+
+.face[data-state='countdown'] .face__head {
+  transform: translateY(-21%) scale(0.5);
+}
+
+.face[data-state='countdown'] .face__eye {
+  transform: translateY(12%) scaleY(0.9);
+}
+
+.face[data-state='countdown'] .face__mouth {
+  transform: scaleX(0.35);
+}
+
+.face[data-state='countdown'][data-count='final'] .face__eye {
+  transform: translateY(20%) scaleY(0.5);
+}
+
+.face[data-state='countdown'][data-count='final'] .face__glow {
+  opacity: 0.6;
+}
+
+.face[data-state='countdown'][data-count='done'] .face__eye {
+  transform: translateY(18%) scaleY(0.07);
+  transition-duration: 900ms;
+  transition-timing-function: ease;
+}
+
+.face[data-state='countdown'][data-count='done'] .face__mouth {
+  transform: scaleX(0.45);
+  opacity: 0.5;
+}
+
+.face[data-state='countdown'][data-count='done'] :is(.face__count, .face__progress) {
+  opacity: 0;
+}
+
+.face[data-state='countdown'][data-count='done'] .face__count-label {
+  top: 64%;
+  font-size: calc(56px * var(--u));
+}
+
 /* ------------------------------------------------------------------- badge */
 
 .face__badge {
@@ -239,8 +355,13 @@
   animation: face-breathe 4.5s ease-in-out infinite;
 }
 
-.face[data-active='true']:is([data-state='listening'], [data-state='thinking'], [data-state='speaking']) .face__eye-inner {
+.face[data-active='true']:is([data-state='listening'], [data-state='thinking'], [data-state='speaking']) .face__eye-inner,
+.face[data-active='true'][data-state='countdown'][data-count='running'] .face__eye-inner {
   animation: face-blink 5.3s infinite;
+}
+
+.face[data-active='true'][data-state='countdown'][data-count='final'] .face__glow {
+  animation: face-pulse 1s ease-in-out infinite;
 }
 
 .face[data-active='true'][data-state='thinking'] .face__orbit {

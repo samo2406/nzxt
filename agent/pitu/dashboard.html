@@ -25,6 +25,7 @@
     --s-offline: #6b7a8f;
     --s-error: #f87171;
     --s-alarm: #ff9b3d;
+    --s-countdown: #ff6b8a;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
@@ -212,7 +213,7 @@
     <div class="tiles" id="tiles"></div>
     <div class="sub-h">Teploty z CAM</div>
     <div class="tiles" id="temps"></div>
-    <div class="sub-h">Minútky</div>
+    <div class="sub-h">Časovače</div>
     <ul class="timers" id="timers"></ul>
   </section>
 
@@ -262,7 +263,7 @@
 
   const STATES = {
     sleeping: 'spí', listening: 'počúva', thinking: 'premýšľa', speaking: 'hovorí',
-    offline: 'offline', error: 'chyba', alarm: 'minútka',
+    offline: 'offline', error: 'chyba', alarm: 'časovač', countdown: 'vypína',
   };
   const LISTEN = { wake: 'čaká na oslovenie', speech: 'čaká na pokračovanie', off: 'neodpočúva' };
   const ERRORS = {

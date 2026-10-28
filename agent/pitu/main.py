@@ -19,7 +19,7 @@ import psutil
 
 from .audio import EARCON_ALARM, EARCON_ERROR, EARCON_WAKE, Fanout, Mic, Playback, Speakers, envelope
 from .brain import Brain, BrainBusy, BrainConfigError, BrainError, BrainOffline, BrainSlow, FakeBrain
-from .commands import Registry
+from .commands import Registry, power
 from .commands.apps import apps
 from .commands.timers import TIMERS, Timer
 from .config import DATA_DIR, Config, load_config
@@ -37,10 +37,12 @@ ECHO_TAIL_S = 0.3
 SETTINGS_PATH = DATA_DIR / "settings.json"
 # The STT stream starts this many frames before the follow-up onset VAD reported.
 FOLLOW_UP_PREROLL = 4
-STT_PHRASES = ["Piťu", "Spotify", "hlasitosť", "stlm", "minútka", "minútku", "časovač", "Mouse Jiggler"]
+STT_PHRASES = ["Piťu", "Spotify", "hlasitosť", "stlm", "časovač", "časovače", "Mouse Jiggler"]
 ALARM_REPEATS = 2
 # Long waits are cut into steps so a sleep/hibernate doesn't push a timer back.
 TIMER_POLL_S = 30.0
+# The face counts the last seconds before a voice-ordered shutdown.
+COUNTDOWN_S = 10
 
 
 @dataclass
@@ -376,7 +378,7 @@ class Assistant:
                     log.exception("turn failed")
                     await self.say_phrase("broken")
                 finally:
-                    self.events.set_state("sleeping")
+                    self._rest()
                     await self._unduck(duck)
                     self.listener.set_mode("wake")
 
@@ -441,6 +443,44 @@ class Assistant:
             start = max(onset - FOLLOW_UP_PREROLL, 0)
             follow_up = True
 
+    def _rest(self) -> None:
+        plan = power.planned()
+        if plan and plan.due - time.time() <= COUNTDOWN_S:
+            self.events.set_state("countdown", until=int(plan.due * 1000), restart=plan.restart)
+        else:
+            self.events.set_state("sleeping")
+
+    async def run_power(self) -> None:
+        loop = asyncio.get_running_loop()
+        changed = asyncio.Event()
+        power.on_change = lambda: loop.call_soon_threadsafe(changed.set)
+        shown = False
+        while True:
+            changed.clear()
+            plan = power.planned()
+            if plan is None:
+                # Mid-turn, the turn's end puts the face to rest itself.
+                if shown and not self._turn_lock.locked():
+                    self._rest()
+                shown = False
+                await changed.wait()
+                continue
+            now = time.time()
+            if plan.due - now > COUNTDOWN_S:
+                try:
+                    await asyncio.wait_for(changed.wait(), plan.due - now - COUNTDOWN_S)
+                except TimeoutError:
+                    pass
+                continue
+            if not shown and not self._turn_lock.locked():
+                self._rest()
+            shown = True
+            try:
+                # If the PC is somehow still up well after, planned() lapses and the face goes back to sleep.
+                await asyncio.wait_for(changed.wait(), plan.due + 11 - now)
+            except TimeoutError:
+                pass
+
     # ----------------------------------------------------------------- timers
 
     async def run_timers(self) -> None:
@@ -475,7 +515,7 @@ class Assistant:
             try:
                 self.events.set_state("alarm")
                 if self.print_only:
-                    print(f"[minútka] {timer.label}")
+                    print(f"[časovač] {timer.label}")
                 speech = asyncio.ensure_future(self._timer_speech(timer))
                 for _ in range(ALARM_REPEATS):
                     await self._play(EARCON_ALARM)
@@ -485,7 +525,7 @@ class Assistant:
                     await self._play(pcm, state="speaking")
                 await asyncio.sleep(ECHO_TAIL_S)
             finally:
-                self.events.set_state("sleeping")
+                self._rest()
                 await self._unduck(duck)
                 if self.listener is not None:
                     self.listener.set_mode("wake")
@@ -519,7 +559,7 @@ class Assistant:
                 self.events.set_state("thinking")
                 timings = Timings(final=time.monotonic())
                 await self.reply(text, timings)
-                self.events.set_state("sleeping")
+                self._rest()
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -593,6 +633,7 @@ async def _amain(args: argparse.Namespace) -> None:
     except Exception:
         log.exception("could not restore volumes from the last run")
     timers = asyncio.ensure_future(app.run_timers())
+    power_watch = asyncio.ensure_future(app.run_power())
     try:
         if args.text:
             await app.run_text()
@@ -600,6 +641,7 @@ async def _amain(args: argparse.Namespace) -> None:
             await app.run_voice()
     finally:
         timers.cancel()
+        power_watch.cancel()
 
 
 def main(argv: list[str] | None = None) -> None:

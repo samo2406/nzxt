@@ -5,10 +5,10 @@
  * slow retry — never an error on screen.
  */
 
-export type FaceState = 'sleeping' | 'listening' | 'thinking' | 'speaking' | 'offline' | 'error' | 'alarm';
+export type FaceState = 'sleeping' | 'listening' | 'thinking' | 'speaking' | 'offline' | 'error' | 'alarm' | 'countdown';
 
 export type AssistantMessage =
-  | { type: 'state'; state: FaceState; at?: number; followUp?: boolean; reason?: string }
+  | { type: 'state'; state: FaceState; at?: number; followUp?: boolean; reason?: string; until?: number; restart?: boolean }
   | { type: 'mouth'; offset: number; env: string }
   | { type: 'status'; mic: string | null; online?: boolean };
 

@@ -41,7 +41,7 @@ class TimerStore:
     def add(self, seconds: int, label: str) -> Timer:
         with self._lock:
             if len(self._timers) >= MAX_TIMERS:
-                raise CommandError("Minútok je už priveľa.")
+                raise CommandError("Časovačov je už priveľa.")
             timer = Timer(uuid.uuid4().hex[:8], label.strip(), time.time() + seconds)
             self._timers.append(timer)
             self._save()
@@ -99,7 +99,7 @@ def _clock(epoch: float) -> str:
 
 
 @command(
-    "Nastaví minútku (odpočet). Na budík o konkrétnom čase dopočítaj sekundy z aktuálneho času. "
+    "Nastaví časovač (odpočet). Na budík o konkrétnom čase dopočítaj sekundy z aktuálneho času. "
     "Funguje aj bez internetu; keď vyprší, zazvoní a povie názov."
 )
 def set_timer(
@@ -114,20 +114,20 @@ def set_timer(
     return f"timer {timer.id} set, rings at {_clock(timer.due)}"
 
 
-@command("Zruší minútku podľa názvu; prázdny názov zruší všetky.")
-def cancel_timer(label: Annotated[str, "názov minútky alebo prázdny reťazec"]) -> str:
+@command("Zruší časovač podľa názvu; prázdny názov zruší všetky.")
+def cancel_timer(label: Annotated[str, "názov časovača alebo prázdny reťazec"]) -> str:
     gone = TIMERS.cancel(label)
     if not gone:
-        raise CommandError("Takú minútku nemám.")
+        raise CommandError("Taký časovač nemám.")
     return f"cancelled {len(gone)}"
 
 
-@command("Zistí, aké minútky bežia a koľko im zostáva.", speaks=False)
+@command("Zistí, aké časovače bežia a koľko im zostáva.", speaks=False)
 def list_timers() -> list[dict[str, Any]] | str:
     now = time.time()
     timers = TIMERS.active()
     if not timers:
-        return "žiadne minútky nebežia"
+        return "žiadne časovače nebežia"
     return [
         {"label": t.label, "remaining_s": max(0, round(t.due - now)), "rings_at": _clock(t.due)} for t in timers
     ]
