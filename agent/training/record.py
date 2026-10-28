@@ -33,7 +33,7 @@ BLOCKS = [
     ("away", "pos", "Otočený chrbtom alebo bokom k mikrofónu.", 10, 3.0),
     ("music", "pos", "Pusti hudbu tak nahlas, ako ju bežne počúvaš.", 10, 3.0),
     ("game", "pos", "Pusti hru alebo YouTube so zvukom.", 10, 3.0),
-    ("near", "near", "Povedz, čo sa ukáže (NIE Hej Piťu).", 12, 3.0),
+    ("near", "near", "Čítaj nahlas podobne znejúce frázy, ktoré sa ukážu (Hej Peťo, Hej ty…), nie „Hej Piťu“.", 12, 3.0),
     ("talk", "talk", "Rozprávaj 60 s normálne, napr. čítaj nahlas správy. Len nie „Hej Piťu“.", 60, 0),
     ("room", "room", "Pusti hudbu alebo hru a 60 s nehovor.", 60, 0),
 ]

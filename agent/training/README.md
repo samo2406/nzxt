@@ -35,10 +35,11 @@ Then run `python features.py` and `python train.py` as above. Every fourth take 
 
 ## Current model
 
-Synthetic voices only:
+Synthetic voices plus 64 of Samo's takes:
 
+- **Your voice:** 16 of 16 held-out takes woke it, including across the room, turned away, and over music or a game. The synthetic-only model managed 7 of 16, and 48 of all 80 takes.
+- **Other voices:** 99.6 % of held-out synthetic voices woke it through the streaming path.
 - **False wakes:** 0 in the 4.3 h held-out part of the validation set (conversation, music, noise). Stock "Hey Jarvis" gets 0.47/h on the same audio.
-- **Recall:** 93 % on the held-out voices, measured with noise and reverb through the streaming path.
-- **Near-misses:** about 4 % of deliberately close phrases ("Hej Peťo") wake it.
+- **Near-misses:** about 2 % of deliberately close phrases ("Hej Peťo") wake it, and 0 of 3 of your held-out ones.
 
-Real recordings of your voice and mic are the next step. Recall on synthetic voices is a proxy for that, not a promise.
+Sixteen takes is a small test, so the diagnostics page's wake score in daily use is the real verdict.

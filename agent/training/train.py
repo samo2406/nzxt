@@ -200,7 +200,7 @@ def main() -> None:
     ap.add_argument("--dim", type=int, default=48)
     ap.add_argument("--blocks", type=int, default=1)
     ap.add_argument("--dropout", type=float, default=0.2)
-    ap.add_argument("--neg-weight", type=float, default=100.0)
+    ap.add_argument("--neg-weight", type=float, default=60.0)
     ap.add_argument("--threshold", type=float, default=0.5)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)

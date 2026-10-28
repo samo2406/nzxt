@@ -257,7 +257,7 @@ def main() -> None:
     takes = recorded_takes()
     if takes:
         pos = [t for t in takes if t.kind == "pos"]
-        print(f"your takes: {len(pos)} of \"Hej Piťu\", {sum(t.held_out for t in pos)} held out", flush=True)
+        print(f"your takes: {len(pos)} positive, {sum(t.held_out for t in pos)} held out", flush=True)
         embed(features, take_windows([t for t in pos if not t.held_out], 12, babble), "pos_rec_train")
         test = [real_window(t.audio, t.end + RATE // 10) for t in pos if t.held_out]
         embed(features, np.stack(test) if test else np.zeros((0, WINDOW)), "pos_rec_test")
