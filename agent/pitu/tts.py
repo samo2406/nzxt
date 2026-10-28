@@ -31,11 +31,15 @@ def _speech_config(cfg: Config, streaming: bool) -> speechsdk.SpeechConfig:
     return sc
 
 
+def _rate(rate: float) -> str:
+    return f"{(rate - 1) * 100:+.0f}%"
+
+
 def _ssml(voice: str, rate: float, text: str) -> str:
     escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     return (
         '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="sk-SK">'
-        f'<voice name="{voice}"><prosody rate="{rate:.2f}">{escaped}</prosody></voice></speak>'
+        f'<voice name="{voice}"><prosody rate="{_rate(rate)}">{escaped}</prosody></voice></speak>'
     )
 
 
@@ -67,7 +71,7 @@ class _StreamingUtterance(Utterance):
             input_type=speechsdk.SpeechSynthesisRequestInputType.TextStream
         )
         if rate != 1.0:
-            self._request.rate = rate
+            self._request.rate = _rate(rate)
         self._future = synth.speak_async(self._request)
         self._closed = False
 

@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 MAX_UTTERANCE_S = 15.0
 
-_WAKE_PREFIX = re.compile(r"^\s*(?:(?:hej|hey|ahoj|haló)[\s,]+)?(?:pi[tť][uú]|jarvis)\b[\s,.!?]*", re.IGNORECASE)
+_WAKE_PREFIX = re.compile(r"^\s*(?:(?:hej|hey|ahoj|haló)[\s,]+)?(?:pi[tťcč][uú]|jarvis)\b[\s,.!?]*", re.IGNORECASE)
 
 
 class SttError(Exception):
