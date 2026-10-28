@@ -66,6 +66,7 @@ The agent also serves the repo's local build at `http://127.0.0.1:8765/display/`
 
 - **Personality** — `persona.md`, plain Slovak text. It is re-read on the next turn after you save it. Private details (names, habits) go in `persona.local.md`, which is gitignored.
 - **Apps and sites it may open** — `apps.toml`. It opens nothing else: the names become a fixed list the model must choose from.
+- **Lights** — `lights.toml`: a name you say, and how to reach the light over the home network. Yeelight works locally with *LAN Control* switched on in the Yeelight app; no account or cloud is involved.
 - **Settings** — the optional lines in `.env.example`: model, voice and rate, wake threshold, how long it keeps listening after answering, how far other apps are turned down while it talks.
 
 ### Adding a command

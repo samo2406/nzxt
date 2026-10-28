@@ -1,0 +1,10 @@
+# Svetlá, ktoré Piťu ovláda („zapni svetlo pri posteli“, „daj posteľ na modrú“).
+# Vľavo názov, ako ho povieš. Zmena platí od ďalšieho rozhovoru.
+#
+# Yeelight: v aplikácii Yeelight Classic musí byť pri svetle zapnuté „LAN Control“.
+# `id` ho nájde, aj keď mu router pridelí inú IP adresu.
+
+[lights."posteľ"]
+type = "yeelight"
+host = "192.168.100.12"
+id = "0x000000001fb58f84"
