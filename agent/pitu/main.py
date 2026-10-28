@@ -37,7 +37,7 @@ ECHO_TAIL_S = 0.3
 SETTINGS_PATH = DATA_DIR / "settings.json"
 # The STT stream starts this many frames before the follow-up onset VAD reported.
 FOLLOW_UP_PREROLL = 4
-STT_PHRASES = ["Piťu", "Spotify", "hlasitosť", "stlm", "minútka", "minútku", "časovač"]
+STT_PHRASES = ["Piťu", "Spotify", "hlasitosť", "stlm", "minútka", "minútku", "časovač", "Mouse Jiggler"]
 ALARM_REPEATS = 2
 # Long waits are cut into steps so a sleep/hibernate doesn't push a timer back.
 TIMER_POLL_S = 30.0
