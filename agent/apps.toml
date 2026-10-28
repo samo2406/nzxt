@@ -1,0 +1,19 @@
+# Aplikácie a stránky, ktoré Piťu vie otvoriť („otvor Steam“).
+# Vľavo názov, ako ho povieš; vpravo protokol, program alebo adresa.
+# Iné, než čo je tu, neotvorí. Zmena platí od ďalšieho rozhovoru.
+
+[apps]
+"Spotify" = "spotify:"
+"Steam" = "steam://open/main"
+"Discord" = "discord://"
+"Battle.net" = "battlenet://"
+"Firefox" = "firefox.exe"
+"Chrome" = "chrome.exe"
+"Prieskumník" = "explorer.exe"
+"Kalkulačka" = "calc.exe"
+"Poznámkový blok" = "notepad.exe"
+"Správca úloh" = "taskmgr.exe"
+"Nastavenia" = "ms-settings:"
+"YouTube" = "https://www.youtube.com"
+"Gmail" = "https://mail.google.com"
+"Twitch" = "https://www.twitch.tv"

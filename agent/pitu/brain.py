@@ -97,13 +97,14 @@ class Brain:
             log.debug("brain prewarm failed: %s", err)
 
     def _start_turn(self, text: str) -> None:
-        # Editing the system prompt invalidates earlier thinking blocks, so a
-        # persona edit starts a fresh conversation instead.
+        # Editing the system prompt or tools invalidates earlier thinking
+        # blocks, so a persona edit starts a fresh conversation instead.
         persona_changed = self._persona.refresh()
         expired = time.monotonic() - self._last_turn > MEMORY_S
         if persona_changed or expired:
             self._messages = []
             self._pending_results = []
+            self._tools = self._registry.tool_defs()
         content = [*self._pending_results, {"type": "text", "text": f"{_context_line()} {text}"}]
         self._pending_results = []
         self._messages.append({"role": "user", "content": content})

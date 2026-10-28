@@ -27,6 +27,8 @@ import typing
 from dataclasses import dataclass
 from typing import Any, Callable, Literal, get_args, get_origin
 
+from ..audio import ensure_com
+
 log = logging.getLogger(__name__)
 
 TIMEOUT_S = 5.0
@@ -50,6 +52,7 @@ class Command:
     description: str
     fn: Callable[..., Any]
     speaks: bool
+    timeout: float
 
     def schema(self) -> dict[str, Any]:
         hints = typing.get_type_hints(self.fn, include_extras=True)
@@ -72,9 +75,11 @@ class Command:
 _REGISTRY: dict[str, Command] = {}
 
 
-def command(description: str, *, speaks: bool = True) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+def command(
+    description: str, *, speaks: bool = True, timeout: float = TIMEOUT_S
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     def register(fn: Callable[..., Any]) -> Callable[..., Any]:
-        _REGISTRY[fn.__name__] = Command(fn.__name__, description, fn, speaks)
+        _REGISTRY[fn.__name__] = Command(fn.__name__, description, fn, speaks, timeout)
         return fn
 
     return register
@@ -163,7 +168,7 @@ class Registry:
 
         say = args.pop("say", None) if cmd.speaks else None
         try:
-            result = await asyncio.wait_for(asyncio.to_thread(cmd.fn, **args), TIMEOUT_S)
+            result = await asyncio.wait_for(asyncio.to_thread(_call, cmd.fn, args), cmd.timeout)
         except CommandError as err:
             return _error(tool_id, str(err), str(err))
         except asyncio.TimeoutError:
@@ -178,6 +183,12 @@ class Registry:
             spoken=say,
             needs_reply=not cmd.speaks,
         )
+
+
+def _call(fn: Callable[..., Any], args: dict[str, Any]) -> Any:
+    # Volume and media APIs are COM/WinRT; pool threads start uninitialised.
+    ensure_com()
+    return fn(**args)
 
 
 def _error(tool_id: str, detail: str, spoken: str | None, needs_reply: bool = False) -> Outcome:

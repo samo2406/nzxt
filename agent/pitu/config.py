@@ -39,6 +39,7 @@ class Config:
     follow_up_s: float
     end_silence_ms: int
     face_port: int
+    duck_level: float
     allowed_origins: tuple[str, ...] = field(
         default=("https://samo2406.github.io", "http://127.0.0.1:5173", "http://127.0.0.1:4173")
     )
@@ -69,4 +70,5 @@ def load_config() -> Config:
         follow_up_s=_env_float("FOLLOW_UP_SECONDS", 5.0),
         end_silence_ms=int(_env_float("END_SILENCE_MS", 450)),
         face_port=int(_env_float("FACE_PORT", 8765)),
+        duck_level=min(1.0, max(0.0, _env_float("DUCK_LEVEL", 0.3))),
     )

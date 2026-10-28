@@ -10,10 +10,13 @@ import time
 from dataclasses import dataclass, field
 from logging.handlers import RotatingFileHandler
 
-from .audio import EARCON_ERROR, EARCON_WAKE, FRAME_S, Mic, Playback, Speakers, envelope
+from .audio import EARCON_ALARM, EARCON_ERROR, EARCON_WAKE, Mic, Playback, Speakers, envelope
 from .brain import Brain, BrainBusy, BrainConfigError, BrainError, BrainOffline, BrainSlow, FakeBrain
 from .commands import Registry
+from .commands.apps import apps
+from .commands.timers import TIMERS, Timer
 from .config import DATA_DIR, Config, load_config
+from .ducking import DUCKER
 from .events import Events
 from .face_server import FaceServer
 from .phrases import PhraseCache
@@ -26,7 +29,10 @@ log = logging.getLogger("pitu")
 ECHO_TAIL_S = 0.3
 # The STT stream starts this many frames before the follow-up onset VAD reported.
 FOLLOW_UP_PREROLL = 4
-STT_PHRASES = ["Piťu", "Spotify", "hlasitosť", "stlm", "minútka", "časovač"]
+STT_PHRASES = ["Piťu", "Spotify", "hlasitosť", "stlm", "minútka", "minútku", "časovač"]
+ALARM_REPEATS = 2
+# Long waits are cut into steps so a sleep/hibernate doesn't push a timer back.
+TIMER_POLL_S = 30.0
 
 
 @dataclass
@@ -138,7 +144,7 @@ class Assistant:
         self.events = Events()
         self.speakers = Speakers(cfg.speaker_device)
         self.tts = TextToSpeech(cfg)
-        self.stt = SpeechToText(cfg, STT_PHRASES)
+        self.stt = SpeechToText(cfg, STT_PHRASES + list(apps()))
         self.registry = Registry()
         self.brain: Brain | FakeBrain = FakeBrain() if args.fake_brain else Brain(cfg, self.registry)
         self.phrases = PhraseCache(cfg, self.tts)
@@ -147,6 +153,9 @@ class Assistant:
         self.face: FaceServer | None = None
         self._wake_q: asyncio.Queue[int] = asyncio.Queue()
         self._speech_q: asyncio.Queue[int] = asyncio.Queue()
+        # A conversation and a ringing timer never share the speakers.
+        self._turn_lock = asyncio.Lock()
+        DUCKER.level = cfg.duck_level
 
         sim = args.simulate
         if sim in ("offline", "claude-slow") and isinstance(self.brain, Brain):
@@ -230,14 +239,27 @@ class Assistant:
 
         while True:
             index = await self._wake_q.get()
-            try:
-                await self._conversation(index)
-            except Exception:
-                log.exception("turn failed")
-                await self.say_phrase("broken")
-            finally:
-                self.events.set_state("sleeping")
-                self.listener.set_mode("wake")
+            async with self._turn_lock:
+                duck = asyncio.ensure_future(asyncio.to_thread(DUCKER.duck))
+                try:
+                    await self._conversation(index)
+                except Exception:
+                    log.exception("turn failed")
+                    await self.say_phrase("broken")
+                finally:
+                    self.events.set_state("sleeping")
+                    await self._unduck(duck)
+                    self.listener.set_mode("wake")
+
+    async def _unduck(self, duck: asyncio.Future[None]) -> None:
+        try:
+            await duck
+        except Exception:
+            log.exception("ducking failed")
+        try:
+            await asyncio.to_thread(DUCKER.restore)
+        except Exception:
+            log.exception("restoring volumes failed")
 
     async def _conversation(self, start: int) -> None:
         assert self.mic is not None and self.listener is not None
@@ -288,6 +310,65 @@ class Assistant:
             start = max(onset - FOLLOW_UP_PREROLL, 0)
             follow_up = True
 
+    # ----------------------------------------------------------------- timers
+
+    async def run_timers(self) -> None:
+        loop = asyncio.get_running_loop()
+        changed = asyncio.Event()
+        TIMERS.on_change = lambda: loop.call_soon_threadsafe(changed.set)
+        while True:
+            changed.clear()
+            due = TIMERS.next_due()
+            if due is None:
+                await changed.wait()
+                continue
+            delay = due - time.time()
+            if delay > 0:
+                try:
+                    await asyncio.wait_for(changed.wait(), min(delay, TIMER_POLL_S))
+                except TimeoutError:
+                    pass
+                continue
+            for timer in TIMERS.pop_due():
+                try:
+                    await self.ring(timer)
+                except Exception:
+                    log.exception("timer ring failed")
+
+    async def ring(self, timer: Timer) -> None:
+        log.info("timer rings: %s", timer.label or "-")
+        async with self._turn_lock:
+            if self.listener is not None:
+                self.listener.set_mode("off")
+            duck = asyncio.ensure_future(asyncio.to_thread(DUCKER.duck))
+            try:
+                self.events.set_state("alarm", text=timer.label)
+                if self.print_only:
+                    print(f"[minútka] {timer.label}")
+                speech = asyncio.ensure_future(self._timer_speech(timer))
+                for _ in range(ALARM_REPEATS):
+                    await self._play(EARCON_ALARM)
+                    await asyncio.sleep(0.25)
+                pcm = await speech
+                if pcm:
+                    await self._play(pcm, state="speaking")
+                await asyncio.sleep(ECHO_TAIL_S)
+            finally:
+                self.events.set_state("sleeping")
+                await self._unduck(duck)
+                if self.listener is not None:
+                    self.listener.set_mode("wake")
+
+    async def _timer_speech(self, timer: Timer) -> bytes | None:
+        if timer.label and self.cfg.has_azure and not self.print_only:
+            try:
+                return await asyncio.wait_for(
+                    asyncio.to_thread(self.tts.synthesize, f"Čas vypršal: {timer.label}."), 4.0
+                )
+            except Exception as err:
+                log.info("timer speech unavailable, using the cached phrase: %s", err)
+        return self.phrases.get("timer")
+
     # ------------------------------------------------------------------- text
 
     async def run_text(self) -> None:
@@ -301,12 +382,13 @@ class Assistant:
             text = line.strip()
             if not text:
                 continue
-            self.events.set_state("listening")
-            await asyncio.sleep(0.15)
-            self.events.set_state("thinking", text=text)
-            timings = Timings(final=time.monotonic())
-            await self.reply(text, timings)
-            self.events.set_state("sleeping")
+            async with self._turn_lock:
+                self.events.set_state("listening")
+                await asyncio.sleep(0.15)
+                self.events.set_state("thinking", text=text)
+                timings = Timings(final=time.monotonic())
+                await self.reply(text, timings)
+                self.events.set_state("sleeping")
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -373,10 +455,18 @@ async def _amain(args: argparse.Namespace) -> None:
         await app.face.start()
     except OSError as err:
         log.error("face server could not bind port %d: %s", cfg.face_port, err)
-    if args.text:
-        await app.run_text()
-    else:
-        await app.run_voice()
+    try:
+        await asyncio.to_thread(DUCKER.recover)
+    except Exception:
+        log.exception("could not restore volumes from the last run")
+    timers = asyncio.ensure_future(app.run_timers())
+    try:
+        if args.text:
+            await app.run_text()
+        else:
+            await app.run_voice()
+    finally:
+        timers.cancel()
 
 
 def main(argv: list[str] | None = None) -> None:

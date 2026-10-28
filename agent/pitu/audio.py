@@ -46,7 +46,7 @@ def find_device(hint: str, kind: str) -> int | None:
     return default if default >= 0 else None
 
 
-def _ensure_com() -> None:
+def ensure_com() -> None:
     # WASAPI streams opened on a thread without COM fail with a misleading
     # "Unanticipated host error ... WDM-KS"; CoInitializeEx is idempotent.
     if sys.platform == "win32":
@@ -129,7 +129,7 @@ class Mic:
                 log.exception("mic consumer failed")
 
     def _open(self) -> None:
-        _ensure_com()
+        ensure_com()
         device = find_device(self._hint, "input")
         self._stream = sd.InputStream(
             samplerate=MIC_RATE,
@@ -228,7 +228,7 @@ class Playback:
         return done
 
     def _open(self) -> None:
-        _ensure_com()
+        ensure_com()
         self._stream = sd.RawOutputStream(
             samplerate=OUT_RATE,
             channels=1,
