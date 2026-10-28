@@ -19,7 +19,13 @@ log = logging.getLogger(__name__)
 
 MAX_UTTERANCE_S = 15.0
 
-_WAKE_PREFIX = re.compile(r"^\s*(?:(?:hej|hey|ahoj|haló)[\s,]+)?(?:pi[tťcč][uú]|jarvis)\b[\s,.!?]*", re.IGNORECASE)
+# Recognition starts before the wake word, so the transcript opens with it as Azure spells it
+# ("Hej Piťu", "Ej pitiu", "Hej Peťo"), sometimes after the tail of whatever was said before.
+_NAME = r"(?:p[iíeé][tťd]['ʼ’]?[ij]?[uúoó]|jarvis)"
+_WAKE_PREFIX = re.compile(
+    rf"^(?:.{{0,25}}?\b(?:(?:hej|hey|ej|ahoj|haló)[\s,.!]*)?{_NAME}\b|\s*(?:hej|hey|ej)\b)[\s,.!?]*",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class SttError(Exception):
@@ -31,6 +37,8 @@ class Heard:
     text: str
     speech_end: float | None
     """Monotonic time the speaker stopped talking, from Azure's word timings."""
+    end_frame: int
+    """Mic frame where the recognised speech ended."""
 
 
 def strip_wake_phrase(text: str) -> str:
@@ -116,9 +124,11 @@ class SpeechToText:
             unsubscribe()
 
         if result.reason == speechsdk.ResultReason.RecognizedSpeech:
-            text = strip_wake_phrase(result.text)
-            end = stream_start + (result.offset + result.duration) / 1e7
-            return Heard(text, end) if text else None
+            if not result.text.strip():
+                return None
+            spoken_s = (result.offset + result.duration) / 1e7
+            # Empty text means only the wake phrase was said; the caller listens on.
+            return Heard(strip_wake_phrase(result.text), stream_start + spoken_s, start_index + int(spoken_s / FRAME_S))
         if result.reason == speechsdk.ResultReason.Canceled:
             details = result.cancellation_details
             if details.reason == speechsdk.CancellationReason.Error:

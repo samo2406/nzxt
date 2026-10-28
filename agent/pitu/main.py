@@ -37,6 +37,9 @@ ECHO_TAIL_S = 0.3
 SETTINGS_PATH = DATA_DIR / "settings.json"
 # The STT stream starts this many frames before the follow-up onset VAD reported.
 FOLLOW_UP_PREROLL = 4
+# Speech-to-text also gets the second before the wake detection, the whole "Hej Piťu",
+# so a request said straight after it starts on a clean word boundary.
+WAKE_PREROLL = 13
 STT_PHRASES = ["Piťu", "Spotify", "hlasitosť", "stlm", "časovač", "časovače", "Mouse Jiggler"]
 ALARM_REPEATS = 2
 # Long waits are cut into steps so a sleep/hibernate doesn't push a timer back.
@@ -403,7 +406,9 @@ class Assistant:
         asyncio.ensure_future(self.brain.prewarm())
         asyncio.ensure_future(asyncio.to_thread(self.tts.prewarm))
 
+        start = max(start - WAKE_PREROLL, 0)
         follow_up = False
+        waited_for_request = False
         while True:
             timings = Timings()
             try:
@@ -422,6 +427,16 @@ class Assistant:
                 log.info("nothing heard")
                 self.record_turn(None, timings, error="nothing_heard")
                 return
+            if not heard.text:
+                if waited_for_request:
+                    log.info("only the wake phrase heard")
+                    self.record_turn(None, timings, error="nothing_heard")
+                    return
+                # "Hej Piťu" … pause … request: listen on from where the wake phrase ended.
+                waited_for_request = True
+                start = heard.end_frame
+                continue
+            waited_for_request = False
             timings.final = time.monotonic()
             timings.speech_end = heard.speech_end
             log.info("heard: %s", heard.text)
