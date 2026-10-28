@@ -249,8 +249,12 @@ class Brain:
             raise BrainOffline("simulated")
         try:
             async with asyncio.timeout(FIRST_TOKEN_TIMEOUT_S) as deadline:
+                # The automatic 5-minute breakpoint caches the conversation so far, search results included.
                 async with self._client.beta.messages.stream(
-                    max_tokens=MAX_TOKENS, messages=self._messages, **self._params(self._system, self._tools)
+                    max_tokens=MAX_TOKENS,
+                    messages=self._messages,
+                    cache_control={"type": "ephemeral"},
+                    **self._params(self._system, self._tools),
                 ) as stream:
                     async for event in stream:
                         if event.type == "text":
