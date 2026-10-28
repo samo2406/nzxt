@@ -292,7 +292,7 @@ class Assistant:
             timings.final = time.monotonic()
             timings.speech_end = heard.speech_end
             log.info("heard: %s", heard.text)
-            self.events.set_state("thinking", text=heard.text)
+            self.events.set_state("thinking")
             if not await self.reply(heard.text, timings):
                 return
 
@@ -342,7 +342,7 @@ class Assistant:
                 self.listener.set_mode("off")
             duck = asyncio.ensure_future(asyncio.to_thread(DUCKER.duck))
             try:
-                self.events.set_state("alarm", text=timer.label)
+                self.events.set_state("alarm")
                 if self.print_only:
                     print(f"[minútka] {timer.label}")
                 speech = asyncio.ensure_future(self._timer_speech(timer))
@@ -385,7 +385,7 @@ class Assistant:
             async with self._turn_lock:
                 self.events.set_state("listening")
                 await asyncio.sleep(0.15)
-                self.events.set_state("thinking", text=text)
+                self.events.set_state("thinking")
                 timings = Timings(final=time.monotonic())
                 await self.reply(text, timings)
                 self.events.set_state("sleeping")

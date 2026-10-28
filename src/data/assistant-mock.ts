@@ -89,7 +89,7 @@ export class MockAssistant implements AssistantSource {
   private turn(): void {
     this.clear();
     this.state('listening');
-    this.later(1800, () => this.state('thinking', { text: 'aká je vonku teplota' }));
+    this.later(1800, () => this.state('thinking'));
     this.later(3000, () => this.speak(3.2));
     this.later(6600, () => this.state('listening', { followUp: true }));
     this.later(9000, () => this.state('sleeping'));

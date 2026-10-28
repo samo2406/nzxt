@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -11,6 +11,10 @@ DATA_DIR = AGENT_DIR / "data"
 PERSONA_PATH = AGENT_DIR / "persona.md"
 PERSONA_LOCAL_PATH = AGENT_DIR / "persona.local.md"
 APPS_PATH = AGENT_DIR / "apps.toml"
+
+PAGES_ORIGIN = ("https://samo2406.github.io",)
+# Any local Vite project uses these ports, so they are trusted only on request.
+DEV_ORIGINS = ("http://127.0.0.1:5173", "http://127.0.0.1:4173")
 
 
 def _env(name: str, default: str = "") -> str:
@@ -40,9 +44,7 @@ class Config:
     end_silence_ms: int
     face_port: int
     duck_level: float
-    allowed_origins: tuple[str, ...] = field(
-        default=("https://samo2406.github.io", "http://127.0.0.1:5173", "http://127.0.0.1:4173")
-    )
+    allowed_origins: tuple[str, ...]
 
     @property
     def has_azure(self) -> bool:
@@ -71,4 +73,5 @@ def load_config() -> Config:
         end_silence_ms=int(_env_float("END_SILENCE_MS", 450)),
         face_port=int(_env_float("FACE_PORT", 8765)),
         duck_level=min(1.0, max(0.0, _env_float("DUCK_LEVEL", 0.3))),
+        allowed_origins=PAGES_ORIGIN + (DEV_ORIGINS if _env("FACE_DEV_ORIGINS") == "1" else ()),
     )

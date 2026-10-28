@@ -8,7 +8,7 @@
 export type FaceState = 'sleeping' | 'listening' | 'thinking' | 'speaking' | 'offline' | 'error' | 'alarm';
 
 export type AssistantMessage =
-  | { type: 'state'; state: FaceState; at?: number; text?: string; followUp?: boolean; reason?: string }
+  | { type: 'state'; state: FaceState; at?: number; followUp?: boolean; reason?: string }
   | { type: 'mouth'; offset: number; env: string }
   | { type: 'status'; mic: string | null; online?: boolean };
 

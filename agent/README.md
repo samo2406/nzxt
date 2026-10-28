@@ -44,7 +44,7 @@ mic ─► wake word (openWakeWord, local) ─► Azure STT ─► Claude (+ com
 | `python -m pitu --list-devices` | WASAPI devices, for `MIC_DEVICE` / `SPEAKER_DEVICE` |
 | `-v` | debug logging |
 
-With the agent running, `npm run dev` and `http://127.0.0.1:5173/?kraken=1` shows the face exactly as the LCD will. Without the agent, `?kraken=1&mock=1` drives the face from the keyboard: `1` sleep, `2` listen, `3` think, `4` speak, `5` offline, `6` alarm, `7` error, `w` a whole turn.
+With the agent running and `FACE_DEV_ORIGINS=1` in `.env`, `npm run dev` and `http://127.0.0.1:5173/?kraken=1` shows the face exactly as the LCD will. Without that flag the agent only accepts the GitHub Pages origin, so other local projects on Vite's ports can't connect. Without the agent, `?kraken=1&mock=1` drives the face from the keyboard: `1` sleep, `2` listen, `3` think, `4` speak, `5` offline, `6` alarm, `7` error, `w` a whole turn.
 
 Logs: `data/logs/pitu.log`. Every turn logs its latency split (end of speech → transcript → first token → first audio).
 
