@@ -649,6 +649,7 @@ async def _amain(args: argparse.Namespace) -> None:
         log.exception("could not restore volumes from the last run")
     timers = asyncio.ensure_future(app.run_timers())
     power_watch = asyncio.ensure_future(app.run_power())
+    warm = asyncio.ensure_future(app.brain.keep_warm()) if isinstance(app.brain, Brain) and cfg.has_anthropic else None
     try:
         if args.text:
             await app.run_text()
@@ -657,6 +658,8 @@ async def _amain(args: argparse.Namespace) -> None:
     finally:
         timers.cancel()
         power_watch.cancel()
+        if warm:
+            warm.cancel()
 
 
 def main(argv: list[str] | None = None) -> None:

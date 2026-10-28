@@ -8,12 +8,16 @@ from typing import Any, Protocol
 
 import anthropic
 
-from .commands import Registry
+from .commands import Registry, memory
 from .config import PERSONA_LOCAL_PATH, PERSONA_PATH, Config
 
 log = logging.getLogger(__name__)
 
 FIRST_TOKEN_TIMEOUT_S = 8.0
+# The API compiles strict tool schemas on the first request that uses them (10-15 s,
+# measured), and drops the compiled form after a while unused.
+WARM_EVERY_S = 6 * 3600
+WARM_CHECK_S = 60.0
 MEMORY_S = 180.0
 MAX_ROUNDS = 4
 # Thinking counts toward max_tokens; spoken replies themselves are a few dozen tokens.
@@ -82,6 +86,7 @@ class Brain:
         )
         self._tools = registry.tool_defs()
         self._persona = Persona()
+        self._system = ""
         self._messages: list[dict[str, Any]] = []
         self._pending_results: list[dict[str, Any]] = []
         self._last_turn = 0.0
@@ -97,15 +102,49 @@ class Brain:
         except Exception as err:
             log.debug("brain prewarm failed: %s", err)
 
+    async def keep_warm(self) -> None:
+        """A throwaway request whenever the tool schemas change, so their
+        compilation never lands on a real turn."""
+        warmed: list[dict[str, Any]] | None = None
+        at = 0.0
+        while True:
+            tools = self._registry.tool_defs()
+            if tools and (tools != warmed or time.monotonic() - at > WARM_EVERY_S):
+                self._persona.refresh()
+                started = time.monotonic()
+                try:
+                    async with self._client.beta.messages.stream(
+                        model=self._cfg.claude_model,
+                        max_tokens=16,
+                        system=[{"type": "text", "text": self._system_text(), "cache_control": {"type": "ephemeral"}}],
+                        messages=[{"role": "user", "content": "ping"}],
+                        thinking={"type": "adaptive"},
+                        output_config={"effort": self._cfg.claude_effort},
+                        betas=["server-side-fallback-2026-07-01"],
+                        fallbacks="default",
+                        tools=tools,
+                    ) as stream:
+                        await stream.get_final_message()
+                    warmed, at = tools, time.monotonic()
+                    log.info("tool schemas warmed in %.1f s", at - started)
+                except Exception as err:
+                    log.info("warming tool schemas failed: %s", err)
+            await asyncio.sleep(WARM_CHECK_S)
+
+    def _system_text(self) -> str:
+        return "\n\n".join(p for p in (self._persona.text, memory.prompt()) if p)
+
     def _start_turn(self, text: str) -> None:
         # Editing the system prompt or tools invalidates earlier thinking
         # blocks, so a persona edit starts a fresh conversation instead.
         persona_changed = self._persona.refresh()
         expired = time.monotonic() - self._last_turn > MEMORY_S
-        if persona_changed or expired:
+        if persona_changed or expired or not self._system:
             self._messages = []
             self._pending_results = []
             self._tools = self._registry.tool_defs()
+            # Read once per conversation: a fact saved mid-conversation is already in its history.
+            self._system = self._system_text()
         content = [*self._pending_results, {"type": "text", "text": f"{_context_line()} {text}"}]
         self._pending_results = []
         self._messages.append({"role": "user", "content": content})
@@ -167,7 +206,7 @@ class Brain:
                 async with self._client.beta.messages.stream(
                     model=self._cfg.claude_model,
                     max_tokens=MAX_TOKENS,
-                    system=[{"type": "text", "text": self._persona.text, "cache_control": {"type": "ephemeral"}}],
+                    system=[{"type": "text", "text": self._system, "cache_control": {"type": "ephemeral"}}],
                     messages=self._messages,
                     thinking={"type": "adaptive"},
                     output_config={"effort": self._cfg.claude_effort},
