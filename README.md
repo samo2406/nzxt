@@ -2,11 +2,12 @@
 
 A custom screen for the 2.72" round LCD on an NZXT Kraken Elite V2, running through NZXT CAM's **Web Integration** mode and hosted on GitHub Pages.
 
-Three states on one page:
+Four states on one page:
 
 - **Slideshow** — your own photos, crossfading. They are stored in the browser and never leave the machine.
 - **Now playing** — the album art becomes a full-screen rotating record, with progress as a hairline arc riding the outer rim and no text anywhere. Takes over automatically when something plays; falls back to the slideshow a configurable delay after it stops.
 - **Clock + temperatures** — the current time at the top of the circle with CPU and GPU temperatures beneath it, slideshow only; the music screen carries no text at all. The ink flips light/dark per photo so it stays readable, and the temperature row is toggleable.
+- **Piťu's face** — a minimalist face for the Slovak voice assistant in [`agent/`](agent/README.md). It takes over the screen while you talk to it (listening, thinking, speaking with the mouth following the voice) and hands it back afterwards. Without the agent running it never appears.
 
 The configuration window is in Slovak. Code, comments and commits are in English.
 
@@ -71,6 +72,8 @@ Keys in mock mode:
 | `u` | toggle "authorisation revoked" |
 | `d` | toggle a degraded monitoring payload with missing fields |
 | `t` | force a temperature spike |
+| `1`–`7` | assistant face: sleep, listen, think, speak, offline, alarm, error |
+| `w` | a whole assistant turn |
 
 The mock tracks deliberately include Slovak diacritics, an over-long title, and a podcast episode, because those are the three things that break this layout.
 

@@ -1,0 +1,92 @@
+# Piťu — voice assistant agent
+
+A background Python process on the PC. It listens for a wake phrase locally, understands Slovak speech through Azure, answers with Claude in the voice of Azure's *sk-SK-LukasNeural*, runs a handful of PC commands, and drives a face on the Kraken LCD over a loopback WebSocket.
+
+```
+mic ─► wake word (openWakeWord, local) ─► Azure STT ─► Claude (+ commands) ─► Azure TTS ─► speakers
+                                                                               └─► mouth envelope ─► ws://127.0.0.1:8765 ─► LCD face
+```
+
+## Setup
+
+1. **Python 3.12.** `winget install Python.Python.3.12`, then from this folder:
+
+   ```powershell
+   & "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe" -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+   ```
+
+2. **Keys.** Copy `.env.example` to `.env` and fill it in. `.env` is gitignored; keys never go anywhere else.
+   - Azure portal → create a **Speech** resource, pricing tier **Free F0**, region West Europe → *Keys and Endpoint*.
+   - [console.anthropic.com](https://console.anthropic.com) → API keys.
+
+3. **Microphone access.** Windows Settings → Privacy & security → Microphone → *Let desktop apps access your microphone* must be on.
+
+4. **Try it**, then install it:
+
+   ```powershell
+   .\.venv\Scripts\python.exe -m pitu        # say "Hey Jarvis" (stand-in wake word, see below)
+   .\install.ps1                             # start at logon, hidden
+   ```
+
+`install.ps1` registers a Task Scheduler logon task that runs `pythonw -m pitu` with no window at below-normal priority, and re-launches it within 5 minutes if it ever dies. `.\install.ps1 -Uninstall` removes it. The LCD side needs nothing: the page on GitHub Pages reconnects to the agent on its own, whichever of the two starts first.
+
+## Testing without the mic or the LCD
+
+| Command | What it does |
+| --- | --- |
+| `python -m pitu --text` | type instead of speaking; real Claude, real voice, real face events |
+| `python -m pitu --text --no-tts` | replies are printed instead of spoken |
+| `python -m pitu --text --fake-brain --no-tts` | canned replies — no keys, no cost |
+| `python -m pitu --simulate offline` | no internet: the cached "Nejde mi internet" phrase and the offline face |
+| `python -m pitu --simulate stt-fail` / `claude-slow` | the other failure paths |
+| `python -m pitu --wake-test` | live wake-word scores, to tune `WAKE_THRESHOLD` |
+| `python -m pitu --list-devices` | WASAPI devices, for `MIC_DEVICE` / `SPEAKER_DEVICE` |
+| `-v` | debug logging |
+
+With the agent running, `npm run dev` and `http://127.0.0.1:5173/?kraken=1` shows the face exactly as the LCD will. Without the agent, `?kraken=1&mock=1` drives the face from the keyboard: `1` sleep, `2` listen, `3` think, `4` speak, `5` offline, `6` alarm, `7` error, `w` a whole turn.
+
+Logs: `data/logs/pitu.log`. Every turn logs its latency split (end of speech → transcript → first token → first audio).
+
+## Making it yours
+
+- **Personality** — `persona.md`, plain Slovak text. It is re-read on the next turn after you save it. Private details (names, habits) go in `persona.local.md`, which is gitignored.
+- **Apps and sites it may open** — `apps.toml`. It opens nothing else: the names become a fixed list the model must choose from.
+- **Settings** — the optional lines in `.env.example`: model, voice and rate, wake threshold, how long it keeps listening after answering, how far other apps are turned down while it talks.
+
+### Adding a command
+
+Drop a function into any module in `pitu/commands/` (or a new module there). The decorator turns its signature into the tool schema; nothing else needs registering.
+
+```python
+import ctypes
+from . import CommandError, command
+
+@command("Uzamkne počítač.")
+def lock_pc() -> str:
+    ctypes.windll.user32.LockWorkStation()
+    return "locked"
+
+@command("Zistí voľné miesto na disku C.", speaks=False)
+def free_space() -> dict:
+    ...
+```
+
+- Action commands (the default) get an extra `say` argument: the sentence Claude wants spoken after the action. No second model call is needed.
+- `speaks=False` commands return data, and Claude phrases the answer from it.
+- Raise `CommandError("…")` with a Slovak sentence to have it said out loud.
+- Parameters: `int`, `float`, `str`, `bool`, `Literal[...]`, or `Annotated[str, Choices(fn)]` for a list known only at runtime. Commands run on a worker thread with COM initialised, and time out after 5 s unless you pass `timeout=`.
+
+## Behaviour worth knowing
+
+- **It never hears itself.** It is half-duplex: while it talks, plus 0.3 s, the mic is ignored. You can't interrupt it mid-sentence.
+- **Follow-ups need no wake word.** After an answer it listens for about 5 s, but only sends audio to Azure once local voice detection hears someone.
+- **Other apps are ducked** to 30 % while it listens and talks. The original levels are saved to disk first, so a crash can't leave them low.
+- **Timers** are kept in `data/timers.json`. They ring without internet: alarm face, chime, and the label spoken (or a cached phrase when offline).
+- **Offline.** The wake word and timers keep working. Anything needing the cloud gets a short spoken apology from a phrase cache built while online, and the face shows offline.
+- **Privacy.** No audio leaves the PC before the wake word. After it, only the utterance goes to Azure. No audio is saved, but transcripts appear in the log. Conversation memory lasts 3 minutes.
+- **Resources.** Idle: about 3 % of one core (wake word on CPU), ~280 MB RAM, no GPU.
+
+## Wake word
+
+Until a "Hej Piťu" model is trained, the agent uses openWakeWord's pretrained **"Hey Jarvis"**. Set `WAKE_MODEL` in `.env` to the path of a custom `.onnx` model when one exists.
