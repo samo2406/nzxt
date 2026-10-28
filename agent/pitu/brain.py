@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import time
 from datetime import datetime
 from typing import Any, Protocol
@@ -19,6 +20,15 @@ FIRST_TOKEN_TIMEOUT_S = 8.0
 WARM_EVERY_S = 6 * 3600
 WARM_CHECK_S = 60.0
 MEMORY_S = 180.0
+# Runs on Anthropic's side. No country: the API rejects "SK" as a location.
+WEB_SEARCH = {
+    "type": "web_search_20260209",
+    "name": "web_search",
+    "max_uses": 3,
+    "user_location": {"type": "approximate", "timezone": "Europe/Bratislava"},
+}
+# A search answer takes ~5-8 s; this fills the silence when the model said nothing first.
+SEARCHING = ("Pozriem sa.", "Moment, pozriem.", "Hneď to zistím.")
 MAX_ROUNDS = 4
 # Thinking counts toward max_tokens; spoken replies themselves are a few dozen tokens.
 MAX_TOKENS = 4096
@@ -84,12 +94,13 @@ class Brain:
         self._client = anthropic.AsyncAnthropic(
             max_retries=1, timeout=anthropic.Timeout(30.0, connect=5.0)
         )
-        self._tools = registry.tool_defs()
+        self._tools = self._tool_defs()
         self._persona = Persona()
         self._system = ""
         self._messages: list[dict[str, Any]] = []
         self._pending_results: list[dict[str, Any]] = []
         self._last_turn = 0.0
+        self._spoke = False
         self.simulate: str | None = None
         self.last_turn: dict[str, Any] = {"rounds": [], "tools": []}
 
@@ -108,8 +119,8 @@ class Brain:
         warmed: list[dict[str, Any]] | None = None
         at = 0.0
         while True:
-            tools = self._registry.tool_defs()
-            if tools and (tools != warmed or time.monotonic() - at > WARM_EVERY_S):
+            tools = self._tool_defs()
+            if (tools != warmed or time.monotonic() - at > WARM_EVERY_S):
                 self._persona.refresh()
                 started = time.monotonic()
                 try:
@@ -131,6 +142,9 @@ class Brain:
                     log.info("warming tool schemas failed: %s", err)
             await asyncio.sleep(WARM_CHECK_S)
 
+    def _tool_defs(self) -> list[dict[str, Any]]:
+        return [*self._registry.tool_defs(), WEB_SEARCH]
+
     def _system_text(self) -> str:
         return "\n\n".join(p for p in (self._persona.text, memory.prompt()) if p)
 
@@ -142,7 +156,7 @@ class Brain:
         if persona_changed or expired or not self._system:
             self._messages = []
             self._pending_results = []
-            self._tools = self._registry.tool_defs()
+            self._tools = self._tool_defs()
             # Read once per conversation: a fact saved mid-conversation is already in its history.
             self._system = self._system_text()
         content = [*self._pending_results, {"type": "text", "text": f"{_context_line()} {text}"}]
@@ -151,6 +165,7 @@ class Brain:
 
     async def respond(self, text: str, sink: ReplySink) -> None:
         self.last_turn = {"rounds": [], "tools": []}
+        self._spoke = False
         self._start_turn(text)
         try:
             for _ in range(MAX_ROUNDS):
@@ -159,6 +174,13 @@ class Brain:
                 if message.stop_reason == "refusal":
                     sink.speak("Na toto ti neodpoviem.")
                     return
+                for b in message.content:
+                    if b.type == "server_tool_use" and b.name == "web_search":
+                        self.last_turn["tools"].append(
+                            {"name": b.name, "input": dict(b.input), "result": None, "error": False}
+                        )
+                if message.stop_reason == "pause_turn":
+                    continue
                 tool_uses = [b for b in message.content if b.type == "tool_use"]
                 if not tool_uses:
                     return
@@ -200,7 +222,6 @@ class Brain:
             await asyncio.sleep(FIRST_TOKEN_TIMEOUT_S + 2)
         if self.simulate == "offline":
             raise BrainOffline("simulated")
-        extra: dict[str, Any] = {"tools": self._tools} if self._tools else {}
         try:
             async with asyncio.timeout(FIRST_TOKEN_TIMEOUT_S) as deadline:
                 async with self._client.beta.messages.stream(
@@ -212,18 +233,23 @@ class Brain:
                     output_config={"effort": self._cfg.claude_effort},
                     betas=["server-side-fallback-2026-07-01"],
                     fallbacks="default",
-                    **extra,
+                    tools=self._tools,
                 ) as stream:
                     async for event in stream:
                         if event.type == "text":
                             if deadline.when() is not None:
                                 deadline.reschedule(None)
                                 sink.mark("first_text")
+                            self._spoke = True
                             sink.speak(event.text)
-                        elif event.type == "content_block_start" and deadline.when() is not None:
-                            if event.content_block.type == "tool_use":
+                        elif event.type == "content_block_start":
+                            block = event.content_block
+                            if block.type in ("tool_use", "server_tool_use") and deadline.when() is not None:
                                 deadline.reschedule(None)
                                 sink.mark("first_text")
+                            if block.type == "server_tool_use" and not self._spoke:
+                                self._spoke = True
+                                sink.speak(random.choice(SEARCHING) + " ")
                     message = await stream.get_final_message()
         except TimeoutError as err:
             raise BrainSlow("no first token in time") from err

@@ -54,8 +54,11 @@ def open_website(url: Annotated[str, "celá adresa, napr. https://www.sme.sk"]) 
     return f"opened {parsed.hostname}"
 
 
-@command("Vyhľadá výraz na Google v prehliadači. Len keď o vyhľadanie výslovne požiada.")
-def web_search(query: Annotated[str, "čo hľadať"]) -> str:
+@command(
+    "Otvorí vyhľadávanie na Google v prehliadači. Len keď chce výsledky vidieť v prehliadači "
+    "(„vygoogli mi…“, „otvor na Googli…“); inak hľadaj sám cez web_search a odpovedz."
+)
+def google_search(query: Annotated[str, "čo hľadať"]) -> str:
     if not query.strip():
         raise CommandError("Čo mám hľadať?")
     webbrowser.open(f"https://www.google.com/search?q={quote_plus(query)}")

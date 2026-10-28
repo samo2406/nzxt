@@ -99,6 +99,7 @@ def free_space() -> dict:
 - **It never hears itself.** It is half-duplex: while it talks, plus 0.3 s, the mic is ignored. You can't interrupt it mid-sentence.
 - **Follow-ups need no wake word.** After an answer it listens for about 5 s, but only sends audio to Azure once local voice detection hears someone.
 - **Other apps are ducked** to 30 % while it listens and talks. The original levels are saved to disk first, so a crash can't leave them low.
+- **Web search** runs on Anthropic's side (the `web_search` server tool, at most 3 searches per answer): "aké bude zajtra počasie", "ako hral Slovan". It says "Pozriem sa." first, since an answer takes about 5 s. The browser only opens on "vygoogli mi…". Each search costs $0.01 on top of tokens.
 - **Timers** are kept in `data/timers.json`. They ring without internet: alarm face, chime, and the label spoken (or a cached phrase when offline).
 - **Offline.** The wake word and timers keep working. Anything needing the cloud gets a short spoken apology from a phrase cache built while online, and the face shows offline.
 - **Privacy.** No audio leaves the PC before the wake word. After it, only the utterance goes to Azure. No audio is saved, but transcripts appear in the log. Conversation memory lasts 3 minutes.
