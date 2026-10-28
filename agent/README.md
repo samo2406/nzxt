@@ -51,6 +51,7 @@ Logs: `data/logs/pitu.log`. Every turn logs its latency split (end of speech →
 ## Diagnostics page
 
 While the agent runs, open **http://127.0.0.1:8765/** in any browser. It shows:
+- a volume slider for Piťu's own beeps and speech; it applies at once and is kept in `data/settings.json`, ahead of `VOLUME` in `.env`;
 - live mic level and wake-word score against the threshold;
 - the face state and a two-minute state timeline;
 - every turn: what was heard, the reply, each tool call with its result, the latency split against the 2 s target, and tokens including cache reads;
@@ -59,7 +60,7 @@ While the agent runs, open **http://127.0.0.1:8765/** in any browser. It shows:
 
 The detailed stream (transcripts included) only goes to this page, which the agent serves itself; the LCD connection carries face states and nothing you said.
 
-The preview on that page is `http://127.0.0.1:8765/display/`: the agent serving the repo's local build (`npm run build` in the repo root; rebuild after changing the display code). It is also the fallback for CAM. Current Chrome no longer lets a public site such as GitHub Pages reach `127.0.0.1`. CAM 4.76 runs Chrome 128 and isn't affected, but if a CAM update leaves the face blank, point CAM's Web Integration URL at `http://127.0.0.1:8765/display/` instead. That copy has its own storage, so photos and the Spotify login have to be set up again there.
+The agent also serves the repo's local build at `http://127.0.0.1:8765/display/` (`npm run build` in the repo root; rebuild after changing the display code). It is the fallback for CAM. Current Chrome no longer lets a public site such as GitHub Pages reach `127.0.0.1`. CAM 4.76 runs Chrome 128 and isn't affected, but if a CAM update leaves the face blank, point CAM's Web Integration URL at `http://127.0.0.1:8765/display/` instead. That copy has its own storage, so photos and the Spotify login have to be set up again there.
 
 ## Making it yours
 

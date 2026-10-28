@@ -190,8 +190,9 @@ class Playback:
     """One utterance on the speakers. The device is opened per utterance so an
     idle assistant holds no audio stream at all."""
 
-    def __init__(self, device: int | None) -> None:
+    def __init__(self, device: int | None, volume: float = 1.0) -> None:
         self._device = device
+        self._volume = volume
         self._buf = bytearray()
         self._lock = threading.Lock()
         self._finished = False
@@ -204,6 +205,8 @@ class Playback:
     def feed(self, pcm: bytes) -> None:
         if not pcm:
             return
+        if self._volume != 1.0:
+            pcm = (np.frombuffer(pcm, dtype=np.int16) * self._volume).astype(np.int16).tobytes()
         with self._lock:
             self._buf.extend(pcm)
         if self._stream is None:
@@ -270,14 +273,75 @@ class Playback:
             raise sd.CallbackStop
 
 
+class Fanout:
+    """One utterance on several outputs at once. The first one sets the
+    timing the face's mouth follows."""
+
+    def __init__(self, playbacks: list[Playback]) -> None:
+        self._all = playbacks
+        self._lead = playbacks[0]
+
+    @property
+    def on_start(self) -> Callable[[float], None]:
+        return self._lead.on_start
+
+    @on_start.setter
+    def on_start(self, fn: Callable[[float], None]) -> None:
+        self._lead.on_start = fn
+
+    @property
+    def started_at(self) -> float | None:
+        return self._lead.started_at
+
+    @property
+    def started_wall(self) -> float | None:
+        return self._lead.started_wall
+
+    def feed(self, pcm: bytes) -> None:
+        for pb in list(self._all):
+            try:
+                pb.feed(pcm)
+            except Exception as err:
+                # An unplugged USB output must not silence the others.
+                if len(self._all) == 1:
+                    raise
+                log.warning("output dropped for this utterance: %s", err)
+                self._all.remove(pb)
+                if pb is self._lead:
+                    self._all[0].on_start = pb.on_start
+                    self._lead = self._all[0]
+
+    def finish(self) -> None:
+        for pb in self._all:
+            pb.finish()
+
+    def stop(self) -> None:
+        for pb in self._all:
+            pb.stop()
+
+    def wait(self, timeout: float | None = None) -> bool:
+        deadline = None if timeout is None else time.monotonic() + timeout
+        done = True
+        for pb in self._all:
+            left = None if deadline is None else max(0.0, deadline - time.monotonic())
+            done = pb.wait(left) and done
+        return done
+
+
 class Speakers:
-    def __init__(self, device_hint: str = "") -> None:
-        self._hint = device_hint
+    """`device_hint` may name several outputs, comma-separated; each utterance plays on all of them."""
 
-    def open(self) -> Playback:
-        return Playback(find_device(self._hint, "output"))
+    def __init__(self, device_hint: str = "", volume: float = 1.0) -> None:
+        self._hints = [h.strip() for h in device_hint.split(",") if h.strip()] or [""]
+        self.volume = volume
 
-    def play(self, pcm: bytes, on_start: Callable[[float], None] | None = None) -> Playback:
+    def open(self) -> Playback | Fanout:
+        devices = list(dict.fromkeys(find_device(h, "output") for h in self._hints))
+        if len(devices) == 1:
+            return Playback(devices[0], self.volume)
+        return Fanout([Playback(d, self.volume) for d in devices])
+
+    def play(self, pcm: bytes, on_start: Callable[[float], None] | None = None) -> Playback | Fanout:
         pb = self.open()
         if on_start:
             pb.on_start = on_start

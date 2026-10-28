@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import base64
 import ctypes
+import json
 import logging
 import math
 import os
@@ -16,7 +17,7 @@ from typing import Any
 import numpy as np
 import psutil
 
-from .audio import EARCON_ALARM, EARCON_ERROR, EARCON_WAKE, Mic, Playback, Speakers, envelope
+from .audio import EARCON_ALARM, EARCON_ERROR, EARCON_WAKE, Fanout, Mic, Playback, Speakers, envelope
 from .brain import Brain, BrainBusy, BrainConfigError, BrainError, BrainOffline, BrainSlow, FakeBrain
 from .commands import Registry
 from .commands.apps import apps
@@ -33,6 +34,7 @@ log = logging.getLogger("pitu")
 
 # Speaker reverb and the room tail must die down before the mic is trusted again.
 ECHO_TAIL_S = 0.3
+SETTINGS_PATH = DATA_DIR / "settings.json"
 # The STT stream starts this many frames before the follow-up onset VAD reported.
 FOLLOW_UP_PREROLL = 4
 STT_PHRASES = ["Piťu", "Spotify", "hlasitosť", "stlm", "minútka", "minútku", "časovač"]
@@ -80,7 +82,7 @@ class TurnSpeaker:
         self._app = app
         self._timings = timings
         self._utt: Utterance | None = None
-        self._playback: Playback | None = None
+        self._playback: Playback | Fanout | None = None
         self._text: list[str] = []
         self._env_carry = b""
         self._env_frames = 0
@@ -158,13 +160,24 @@ class TurnSpeaker:
             self._playback.stop()
 
 
+def _saved_volume(default: float) -> float:
+    """The diagnostics page's slider wins over VOLUME in .env once it has been moved."""
+    try:
+        return min(1.0, max(0.0, float(json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))["volume"])))
+    except FileNotFoundError:
+        return default
+    except Exception as err:
+        log.warning("settings file unreadable, using VOLUME from .env: %s", err)
+        return default
+
+
 class Assistant:
     def __init__(self, cfg: Config, args: argparse.Namespace) -> None:
         self.cfg = cfg
         self.args = args
         self.print_only = args.no_tts
         self.events = Events()
-        self.speakers = Speakers(cfg.speaker_device)
+        self.speakers = Speakers(cfg.speaker_device, _saved_volume(cfg.volume))
         self.tts = TextToSpeech(cfg)
         self.stt = SpeechToText(cfg, STT_PHRASES + list(apps()))
         self.registry = Registry()
@@ -303,7 +316,18 @@ class Assistant:
             "ducked": DUCKER.active,
             "timers": [{"label": t.label, "due": t.due} for t in TIMERS.active()],
             "tts_streaming": self.tts.streaming,
+            "volume": self.speakers.volume,
         }
+
+    def set_volume(self, value: float) -> None:
+        self.speakers.volume = round(min(1.0, max(0.0, value)), 2)
+        try:
+            SETTINGS_PATH.write_text(json.dumps({"volume": self.speakers.volume}), encoding="utf-8")
+        except OSError as err:
+            log.warning("could not save the volume: %s", err)
+        log.info("volume %.0f %%", self.speakers.volume * 100)
+        if not self._turn_lock.locked():
+            asyncio.ensure_future(self._play(EARCON_WAKE))
 
     def _on_score(self, score: float) -> None:
         self._wake_score = (score, time.monotonic())
@@ -558,7 +582,8 @@ async def _amain(args: argparse.Namespace) -> None:
         cfg.claude_model, cfg.claude_effort, cfg.tts_voice, cfg.wake_model,
     )
     logging.getLogger().addHandler(DebugLogHandler(app.events))
-    app.face = FaceServer(app.events, cfg.face_port, cfg.allowed_origins, info=app.info, stats=app.stats)
+    app.face = FaceServer(app.events, cfg.face_port, cfg.allowed_origins, info=app.info, stats=app.stats,
+                          on_volume=app.set_volume)
     try:
         await app.face.start()
     except OSError as err:

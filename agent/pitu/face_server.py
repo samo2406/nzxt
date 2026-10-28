@@ -61,8 +61,8 @@ class FaceServer:
     Browsers don't apply CORS to WebSockets, so any page the user opens could
     connect here; the Origin allowlist is what keeps them out. The detailed
     `debug` stream (transcripts, logs) only goes to /debug connections from
-    pages this server served itself. Inbound messages are limited to harmless
-    telemetry — nothing a page sends can make the agent act.
+    pages this server served itself. The LCD page may only send harmless
+    telemetry; the diagnostics page may also set the output volume.
     """
 
     def __init__(
@@ -72,6 +72,7 @@ class FaceServer:
         origins: tuple[str, ...],
         info: Callable[[], dict[str, Any]] = dict,
         stats: Callable[[], dict[str, Any]] = dict,
+        on_volume: Callable[[float], None] = lambda _v: None,
     ) -> None:
         self._events = events
         self._port = port
@@ -79,6 +80,7 @@ class FaceServer:
         self._origins = [*origins, *self._own_origins]
         self._info = info
         self._stats = stats
+        self._on_volume = on_volume
         self._faces: set[ServerConnection] = set()
         self._debug: set[ServerConnection] = set()
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -165,7 +167,7 @@ class FaceServer:
             if is_debug:
                 await ws.send(json.dumps(self._snapshot(), ensure_ascii=False, default=str))
             async for raw in ws:
-                self._receive(raw)
+                self._receive(raw, is_debug)
         except ConnectionClosed:
             pass
         finally:
@@ -192,12 +194,17 @@ class FaceServer:
                 continue
             self._events.debug("stats", faces=len(self._faces), telemetry=self.telemetry, **stats)
 
-    def _receive(self, raw: str | bytes) -> None:
+    def _receive(self, raw: str | bytes, is_debug: bool) -> None:
         try:
             msg = json.loads(raw)
         except ValueError:
             return
-        if isinstance(msg, dict) and msg.get("type") == "telemetry":
+        if not isinstance(msg, dict):
+            return
+        value = msg.get("value")
+        if is_debug and msg.get("type") == "set_volume" and isinstance(value, (int, float)):
+            self._on_volume(float(value))
+        elif msg.get("type") == "telemetry":
             self.telemetry = {
                 k: v for k, v in msg.items() if k != "type" and isinstance(v, (int, float)) and not isinstance(v, bool)
             }

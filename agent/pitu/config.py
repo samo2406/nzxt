@@ -47,6 +47,7 @@ class Config:
     wake_threshold: float
     mic_device: str
     speaker_device: str
+    volume: float
     follow_up_s: float
     end_silence_ms: int
     face_port: int
@@ -76,6 +77,7 @@ def load_config() -> Config:
         wake_threshold=_env_float("WAKE_THRESHOLD", 0.5),
         mic_device=_env("MIC_DEVICE"),
         speaker_device=_env("SPEAKER_DEVICE"),
+        volume=min(1.0, max(0.0, _env_float("VOLUME", 1.0))),
         follow_up_s=_env_float("FOLLOW_UP_SECONDS", 5.0),
         end_silence_ms=int(_env_float("END_SILENCE_MS", 450)),
         face_port=int(_env_float("FACE_PORT", 8765)),

@@ -74,21 +74,9 @@
   .muted { color: var(--muted); }
   .hint { margin: 8px 0 0; color: var(--faint); font-size: 12px; }
 
-  /* display */
-  .lcd {
-    position: relative; width: min(100%, 288px); aspect-ratio: 1; margin: 0 auto;
-    border-radius: 50%; overflow: hidden; background: #000;
-    box-shadow: 0 0 0 6px #1b2230, 0 0 0 7px var(--line);
-  }
-  .lcd iframe {
-    position: absolute; top: 0; left: 0; width: 640px; height: 640px; border: 0;
-    transform-origin: 0 0; pointer-events: none;
-  }
-  .lcd .off {
-    position: absolute; inset: 0; display: grid; place-items: center;
-    color: var(--faint); font-size: 13px; text-align: center; padding: 30px;
-  }
-  .state-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 16px; }
+  /* voice */
+  .state-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .volume { width: 100%; margin: 4px 0 0; accent-color: var(--accent); cursor: pointer; }
   .badge {
     display: inline-flex; align-items: center; gap: 7px;
     padding: 3px 10px; border-radius: 999px; font-weight: 600; font-size: 13px;
@@ -193,11 +181,11 @@
   <div class="offline-banner">Agent nebeží alebo sa reštartuje. Stránka sa pripojí sama, keď znova naštartuje.</div>
 
   <section class="card">
-    <h2>Displej</h2>
-    <div class="lcd" id="lcd"><div class="off" id="lcdOff">Náhľad je vypnutý</div></div>
+    <h2>Piťu</h2>
     <div class="state-row"><span class="badge" id="state">—</span><span class="muted" id="stateFor"></span></div>
-    <label class="toggle"><input type="checkbox" id="lcdToggle"> Živý náhľad stránky displeja</label>
-    <p class="hint">Lokálna kópia stránky displeja (z <code>npm run build</code>), pripojená k agentovi ako LCD. Fotky a Spotify sú len v profile CAM, takže tu chýbajú.</p>
+    <div class="meter-head"><span>Hlasitosť</span><span class="v" id="volV">—</span></div>
+    <input type="range" class="volume" id="vol" min="0" max="100" step="5" disabled>
+    <p class="hint">Pípnutia aj reč, na všetkých výstupoch. Po pustení posuvníka zaznie skúšobné pípnutie; nastavenie platí aj po reštarte.</p>
   </section>
 
   <section class="card">
@@ -516,6 +504,7 @@
   let lastStatus = { mic: null, online: true };
   function setStats(m) {
     stats = m;
+    if (typeof m.volume === 'number' && Date.now() > volumeHeldUntil) showVolume(m.volume * 100);
     setListen(m.listen);
     renderTiles();
     renderTemps(m.telemetry || {});
@@ -683,31 +672,24 @@
   $('logFilter').addEventListener('input', rerenderLog);
   $('logPause').addEventListener('change', () => { if (!$('logPause').checked) rerenderLog(); });
 
-  // ---------------------------------------------------------------- display preview
+  // ---------------------------------------------------------------- volume
 
-  const PREVIEW_KEY = 'pitu-diag-preview';
-  function readPref() { try { return localStorage.getItem(PREVIEW_KEY) !== '0'; } catch { return true; } }
-  function writePref(on) { try { localStorage.setItem(PREVIEW_KEY, on ? '1' : '0'); } catch { /* private window */ } }
-
-  function setPreview(on) {
-    const box = $('lcd');
-    box.querySelector('iframe')?.remove();
-    $('lcdOff').style.display = on ? 'none' : '';
-    if (!on) return;
-    const url = '/display/?kraken=1';
-    const f = el('iframe');
-    f.src = url;
-    f.title = 'Náhľad displeja';
-    box.append(f);
-    fitPreview();
+  // Stats arrive every second; they must not yank the slider out from under a drag.
+  let volumeHeldUntil = 0;
+  function showVolume(pct) {
+    $('vol').disabled = false;
+    $('vol').value = Math.round(pct);
+    $('volV').textContent = `${Math.round(pct)} %`;
   }
-  function fitPreview() {
-    const f = $('lcd').querySelector('iframe');
-    if (f) f.style.transform = `scale(${$('lcd').clientWidth / 640})`;
-  }
-  window.addEventListener('resize', () => { fitPreview(); requestChart(); });
-  $('lcdToggle').checked = readPref();
-  $('lcdToggle').addEventListener('change', (e) => { writePref(e.target.checked); setPreview(e.target.checked); });
+  $('vol').addEventListener('input', (e) => {
+    volumeHeldUntil = Date.now() + 2500;
+    $('volV').textContent = `${e.target.value} %`;
+  });
+  $('vol').addEventListener('change', (e) => {
+    volumeHeldUntil = Date.now() + 2500;
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'set_volume', value: e.target.value / 100 }));
+  });
+  window.addEventListener('resize', requestChart);
 
   // ---------------------------------------------------------------- ticks
 
@@ -722,7 +704,6 @@
 
   renderTiles();
   renderTemps({});
-  setPreview($('lcdToggle').checked);
   connect();
 })();
 </script>
