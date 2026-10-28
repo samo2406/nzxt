@@ -21,6 +21,13 @@ def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
+def _wake_model(value: str) -> str:
+    if not value.endswith(".onnx"):
+        return value
+    path = Path(value)
+    return str(path if path.is_absolute() else AGENT_DIR / path)
+
+
 def _env_float(name: str, default: float) -> float:
     try:
         return float(_env(name, str(default)))
@@ -65,7 +72,7 @@ def load_config() -> Config:
         claude_effort=_env("PITU_EFFORT", "low"),
         tts_voice=_env("TTS_VOICE", "sk-SK-LukasNeural"),
         tts_rate=_env_float("TTS_RATE", 1.05),
-        wake_model=_env("WAKE_MODEL", "hey_jarvis"),
+        wake_model=_wake_model(_env("WAKE_MODEL", "models/hej_pitu.onnx")),
         wake_threshold=_env_float("WAKE_THRESHOLD", 0.5),
         mic_device=_env("MIC_DEVICE"),
         speaker_device=_env("SPEAKER_DEVICE"),

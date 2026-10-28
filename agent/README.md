@@ -25,7 +25,7 @@ mic ─► wake word (openWakeWord, local) ─► Azure STT ─► Claude (+ com
 4. **Try it**, then install it:
 
    ```powershell
-   .\.venv\Scripts\python.exe -m pitu        # say "Hey Jarvis" (stand-in wake word, see below)
+   .\.venv\Scripts\python.exe -m pitu        # say "Hej Piťu"
    .\install.ps1                             # start at logon, hidden
    ```
 
@@ -102,4 +102,4 @@ def free_space() -> dict:
 
 ## Wake word
 
-Until a "Hej Piťu" model is trained, the agent uses openWakeWord's pretrained **"Hey Jarvis"**. Set `WAKE_MODEL` in `.env` to the path of a custom `.onnx` model when one exists.
+**"Hej Piťu"** is `models/hej_pitu.onnx`, trained on synthetic Slovak voices; see [training/](training/README.md) for how it was made and how well it does. If it misses you too often, lower `WAKE_THRESHOLD` (the diagnostics page shows the live score against it). `WAKE_MODEL=hey_jarvis` in `.env` switches back to openWakeWord's stock English "Hey Jarvis".

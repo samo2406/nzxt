@@ -275,7 +275,7 @@ class Assistant:
             "voice": c.tts_voice,
             "rate": c.tts_rate,
             "region": c.azure_region,
-            "wake_model": c.wake_model,
+            "wake_model": os.path.splitext(os.path.basename(c.wake_model))[0],
             "wake_threshold": c.wake_threshold,
             "follow_up_s": c.follow_up_s,
             "end_silence_ms": c.end_silence_ms,
