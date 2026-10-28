@@ -206,7 +206,7 @@ class Assistant:
             key = {BrainOffline: "offline", BrainBusy: "busy", BrainSlow: "slow"}.get(type(err), "broken")
             log.warning("brain failed (%s): %s", type(err).__name__, err)
             if isinstance(err, BrainConfigError):
-                log.error("check ANTHROPIC_API_KEY / CLAUDE_MODEL in agent/.env")
+                log.error("check ANTHROPIC_API_KEY / PITU_MODEL in agent/.env")
             await self.say_phrase(key)
             return False
         except TtsError as err:

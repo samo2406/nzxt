@@ -61,8 +61,8 @@ def load_config() -> Config:
     return Config(
         azure_key=_env("AZURE_SPEECH_KEY"),
         azure_region=_env("AZURE_SPEECH_REGION", "westeurope"),
-        claude_model=_env("CLAUDE_MODEL", "claude-opus-5-5"),
-        claude_effort=_env("CLAUDE_EFFORT", "low"),
+        claude_model=_env("PITU_MODEL", "claude-haiku-5-5"),
+        claude_effort=_env("PITU_EFFORT", "low"),
         tts_voice=_env("TTS_VOICE", "sk-SK-LukasNeural"),
         tts_rate=_env_float("TTS_RATE", 1.05),
         wake_model=_env("WAKE_MODEL", "hey_jarvis"),
