@@ -44,6 +44,10 @@ class Listener:
         self.on_score: Callable[[float], None] | None = None
         log.info("wake model: %s (threshold %.2f)", self._wake_name, threshold)
 
+    @property
+    def mode(self) -> str:
+        return self._mode
+
     def start(self) -> None:
         self._mic.subscribe(self._enqueue)
         threading.Thread(target=self._run, name="listener", daemon=True).start()

@@ -86,6 +86,7 @@ class Brain:
         self._pending_results: list[dict[str, Any]] = []
         self._last_turn = 0.0
         self.simulate: str | None = None
+        self.last_turn: dict[str, Any] = {"rounds": [], "tools": []}
 
     async def prewarm(self) -> None:
         """Opens the TLS connection while the user is still speaking."""
@@ -110,6 +111,7 @@ class Brain:
         self._messages.append({"role": "user", "content": content})
 
     async def respond(self, text: str, sink: ReplySink) -> None:
+        self.last_turn = {"rounds": [], "tools": []}
         self._start_turn(text)
         try:
             for _ in range(MAX_ROUNDS):
@@ -132,6 +134,15 @@ class Brain:
                     *(self._registry.run(b.id, b.name, dict(b.input)) for b in tool_uses)
                 )
                 sink.mark("tools_done")
+                for block, outcome in zip(tool_uses, outcomes):
+                    self.last_turn["tools"].append(
+                        {
+                            "name": block.name,
+                            "input": dict(block.input),
+                            "result": outcome.tool_result.get("content"),
+                            "error": bool(outcome.tool_result.get("is_error")),
+                        }
+                    )
                 for outcome in outcomes:
                     if outcome.spoken:
                         sink.speak(outcome.spoken + " ")
@@ -190,6 +201,15 @@ class Brain:
                 raise BrainBusy(f"{err.status_code}: {err.message}") from err
             raise BrainConfigError(f"{err.status_code}: {err.message}") from err
         usage = message.usage
+        self.last_turn["rounds"].append(
+            {
+                "model": message.model,
+                "stop": message.stop_reason,
+                "in": usage.input_tokens,
+                "cache_read": usage.cache_read_input_tokens,
+                "out": usage.output_tokens,
+            }
+        )
         log.info(
             "claude: model=%s stop=%s in=%s cache_read=%s out=%s",
             message.model,
@@ -213,6 +233,7 @@ class FakeBrain:
 
     def __init__(self) -> None:
         self._i = 0
+        self.last_turn: dict[str, Any] = {"rounds": [], "tools": []}
 
     async def prewarm(self) -> None:
         pass

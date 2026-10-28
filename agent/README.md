@@ -48,6 +48,19 @@ With the agent running and `FACE_DEV_ORIGINS=1` in `.env`, `npm run dev` and `ht
 
 Logs: `data/logs/pitu.log`. Every turn logs its latency split (end of speech → transcript → first token → first audio).
 
+## Diagnostics page
+
+While the agent runs, open **http://127.0.0.1:8765/** in any browser. It shows:
+- live mic level and wake-word score against the threshold;
+- the face state and a two-minute state timeline;
+- every turn: what was heard, the reply, each tool call with its result, the latency split against the 2 s target, and tokens including cache reads;
+- CPU, memory, ducking, timers, whether an LCD page is connected, CAM temperatures;
+- the live log.
+
+The detailed stream (transcripts included) only goes to this page, which the agent serves itself; the LCD connection carries face states and nothing you said.
+
+The preview on that page is `http://127.0.0.1:8765/display/`: the agent serving the repo's local build (`npm run build` in the repo root; rebuild after changing the display code). It is also the fallback for CAM. Current Chrome no longer lets a public site such as GitHub Pages reach `127.0.0.1`. CAM 4.76 runs Chrome 128 and isn't affected, but if a CAM update leaves the face blank, point CAM's Web Integration URL at `http://127.0.0.1:8765/display/` instead. That copy has its own storage, so photos and the Spotify login have to be set up again there.
+
 ## Making it yours
 
 - **Personality** — `persona.md`, plain Slovak text. It is re-read on the next turn after you save it. Private details (names, habits) go in `persona.local.md`, which is gitignored.

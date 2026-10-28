@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piťu · diagnostika</title>
+<style>
+  :root {
+    --bg: #0b0e13;
+    --panel: #121720;
+    --panel-2: #171d28;
+    --line: #232b38;
+    --ink: #e6ecf3;
+    --muted: #8593a6;
+    --faint: #56637a;
+    --accent: #5ce1e6;
+    --ok: #34d399;
+    --warn: #ffb547;
+    --bad: #f87171;
+    --mono: ui-monospace, "JetBrains Mono", Consolas, monospace;
+    --s-sleeping: #3a4556;
+    --s-listening: #5ce1e6;
+    --s-thinking: #a78bfa;
+    --s-speaking: #34d399;
+    --s-offline: #6b7a8f;
+    --s-error: #f87171;
+    --s-alarm: #ff9b3d;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.45 system-ui, "Segoe UI", sans-serif;
+  }
+  .top {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+    padding: 12px 20px;
+    background: rgba(11, 14, 19, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand h1 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: 0.01em; }
+  .brand .sub { color: var(--muted); }
+  .conn { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .conn::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); }
+  .conn[data-on="true"]::before { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+  .chip {
+    padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--panel); color: var(--muted); font-size: 12px; white-space: nowrap;
+  }
+  .chip b { color: var(--ink); font-weight: 600; }
+
+  main {
+    display: grid; gap: 16px; padding: 16px 20px 40px;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    max-width: 1500px; margin: 0 auto;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px 16px; min-width: 0;
+  }
+  .card.wide { grid-column: 1 / -1; }
+  h2 {
+    margin: 0 0 12px; font-size: 12px; font-weight: 650; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted);
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2 .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .muted { color: var(--muted); }
+  .hint { margin: 8px 0 0; color: var(--faint); font-size: 12px; }
+
+  /* display */
+  .lcd {
+    position: relative; width: min(100%, 288px); aspect-ratio: 1; margin: 0 auto;
+    border-radius: 50%; overflow: hidden; background: #000;
+    box-shadow: 0 0 0 6px #1b2230, 0 0 0 7px var(--line);
+  }
+  .lcd iframe {
+    position: absolute; top: 0; left: 0; width: 640px; height: 640px; border: 0;
+    transform-origin: 0 0; pointer-events: none;
+  }
+  .lcd .off {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    color: var(--faint); font-size: 13px; text-align: center; padding: 30px;
+  }
+  .state-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 16px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 3px 10px; border-radius: 999px; font-weight: 600; font-size: 13px;
+    background: color-mix(in srgb, var(--c, var(--faint)) 18%, transparent);
+    color: var(--c, var(--ink));
+  }
+  .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c, var(--faint)); }
+  .toggle { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--muted); font-size: 13px; justify-content: center; }
+
+  /* meters */
+  .meter { margin-bottom: 14px; }
+  .meter-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+  .meter-head .v { font-family: var(--mono); color: var(--ink); }
+  .bar { position: relative; height: 10px; border-radius: 5px; background: var(--panel-2); overflow: hidden; }
+  .bar > i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 5px; background: var(--accent); transition: width 80ms linear; }
+  .bar.mic > i { background: linear-gradient(90deg, #2b8a8d, var(--accent) 70%, var(--warn)); }
+  .bar .mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--warn); }
+  canvas { display: block; width: 100%; height: 120px; border-radius: 8px; background: var(--panel-2); }
+  .legend { display: flex; gap: 14px; margin-top: 6px; color: var(--faint); font-size: 12px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; margin-right: 6px; vertical-align: middle; background: var(--c); }
+
+  /* tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  .tile { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  .tile .k { color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .tile .v { font-size: 15px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .v.ok { color: var(--ok); }
+  .tile .v.warn { color: var(--warn); }
+  .tile .v.bad { color: var(--bad); }
+  .tile .v small { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .sub-h { margin: 14px 0 6px; color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .timers { list-style: none; margin: 0; padding: 0; }
+  .timers li { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .timers li:last-child { border: 0; }
+  .timers .t { font-family: var(--mono); }
+
+  /* timeline */
+  .tl { position: relative; height: 26px; border-radius: 6px; background: var(--panel-2); overflow: hidden; }
+  .tl i { position: absolute; top: 0; bottom: 0; background: var(--c); }
+  .tl-axis { display: flex; justify-content: space-between; color: var(--faint); font-size: 11px; margin-top: 4px; font-family: var(--mono); }
+  .tl-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
+
+  /* turns */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--faint); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding: 0 10px 8px 0; white-space: nowrap; }
+  td { vertical-align: top; padding: 9px 10px 9px 0; border-top: 1px solid var(--line); }
+  td.time { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+  td.heard { min-width: 160px; max-width: 280px; }
+  td.reply { min-width: 200px; max-width: 380px; color: #c9d3df; }
+  .err { display: inline-block; color: var(--bad); background: rgba(248, 113, 113, 0.12); border-radius: 4px; padding: 0 6px; font-size: 12px; }
+  .tool { display: inline-block; margin: 0 4px 4px 0; padding: 1px 7px; border-radius: 4px; background: var(--panel-2); font-family: var(--mono); font-size: 12px; cursor: help; }
+  .tool.bad { color: var(--bad); }
+  .lat { min-width: 210px; }
+  .lat-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--panel-2); position: relative; }
+  .lat-bar i { height: 100%; }
+  .lat-bar .target { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--warn); }
+  .lat-nums { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 4px; white-space: nowrap; }
+  .lat-nums b { color: var(--ink); font-weight: 600; }
+  .tokens { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .empty { color: var(--faint); padding: 14px 0 4px; }
+
+  /* log */
+  .log-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  select, input[type="search"] {
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+    padding: 3px 8px; font: inherit; font-size: 12px;
+  }
+  .log-body {
+    height: 340px; overflow: auto; background: #0a0d12; border-radius: 8px; padding: 8px 10px;
+    font-family: var(--mono); font-size: 12px; line-height: 1.55;
+  }
+  .ln { display: grid; grid-template-columns: 64px 62px minmax(90px, 160px) 1fr; gap: 10px; white-space: pre-wrap; word-break: break-word; }
+  .ln .t { color: var(--faint); }
+  .ln .n { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ln[data-l="WARNING"] .l, .ln[data-l="WARNING"] .m { color: var(--warn); }
+  .ln[data-l="ERROR"] .l, .ln[data-l="ERROR"] .m, .ln[data-l="CRITICAL"] .m { color: var(--bad); }
+  .ln[data-l="INFO"] .l { color: var(--muted); }
+
+  .offline-banner {
+    display: none; grid-column: 1 / -1; padding: 12px 16px; border-radius: 10px;
+    background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.35); color: #fbc4c4;
+  }
+  body[data-conn="false"] .offline-banner { display: block; }
+
+  @media (max-width: 640px) {
+    .top, main { padding-left: 16px; padding-right: 16px; }
+    .chips { margin-left: 0; }
+    .ln { grid-template-columns: 58px 1fr; }
+    .ln .l, .ln .n { display: none; }
+  }
+</style>
+</head>
+<body data-conn="false">
+<header class="top">
+  <div class="brand"><h1>Piťu</h1><span class="sub">diagnostika</span></div>
+  <span class="conn" id="conn">odpojené</span>
+  <div class="chips" id="chips"></div>
+</header>
+
+<main>
+  <div class="offline-banner">Agent nebeží alebo sa reštartuje. Stránka sa pripojí sama, keď znova naštartuje.</div>
+
+  <section class="card">
+    <h2>Displej</h2>
+    <div class="lcd" id="lcd"><div class="off" id="lcdOff">Náhľad je vypnutý</div></div>
+    <div class="state-row"><span class="badge" id="state">—</span><span class="muted" id="stateFor"></span></div>
+    <label class="toggle"><input type="checkbox" id="lcdToggle"> Živý náhľad stránky displeja</label>
+    <p class="hint">Lokálna kópia stránky displeja (z <code>npm run build</code>), pripojená k agentovi ako LCD. Fotky a Spotify sú len v profile CAM, takže tu chýbajú.</p>
+  </section>
+
+  <section class="card">
+    <h2>Mikrofón a prebudenie <span class="badge" id="listen">—</span></h2>
+    <div class="meter">
+      <div class="meter-head"><span>Hlasitosť mikrofónu</span><span class="v" id="micV">—</span></div>
+      <div class="bar mic"><i id="micBar"></i></div>
+    </div>
+    <div class="meter">
+      <div class="meter-head"><span>Skóre prebudzovacieho slova</span><span class="v" id="wakeV">—</span></div>
+      <div class="bar"><i id="wakeBar"></i><span class="mark" id="wakeMark"></span></div>
+    </div>
+    <canvas id="chart" width="600" height="120"></canvas>
+    <div class="legend">
+      <span style="--c: var(--accent)">skóre (0–1)</span>
+      <span style="--c: var(--warn)">prah</span>
+      <span style="--c: #2f4a5c">mikrofón (−60…0 dBFS)</span>
+    </div>
+    <p class="hint" id="micErr"></p>
+  </section>
+
+  <section class="card">
+    <h2>Systém</h2>
+    <div class="tiles" id="tiles"></div>
+    <div class="sub-h">Teploty z CAM</div>
+    <div class="tiles" id="temps"></div>
+    <div class="sub-h">Minútky</div>
+    <ul class="timers" id="timers"></ul>
+  </section>
+
+  <section class="card wide">
+    <h2>Časová os stavov <span class="muted">posledné 2 minúty</span></h2>
+    <div class="tl" id="tl"></div>
+    <div class="tl-axis"><span>−2:00</span><span>−1:30</span><span>−1:00</span><span>−0:30</span><span>teraz</span></div>
+    <div class="tl-legend" id="tlLegend"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>Rozhovory <span class="muted" id="turnCount"></span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Čas</th><th>Počul som</th><th>Odpoveď</th><th>Nástroje</th><th>Latencia</th><th>Tokeny</th></tr></thead>
+        <tbody id="turns"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="turnsEmpty">Zatiaľ žiadny rozhovor.</div>
+  </section>
+
+  <section class="card wide">
+    <h2>Log
+      <span class="log-tools">
+        <select id="logLevel" aria-label="Úroveň">
+          <option value="0">Všetko</option>
+          <option value="1">Varovania a chyby</option>
+          <option value="2">Len chyby</option>
+        </select>
+        <input type="search" id="logFilter" placeholder="Filtrovať…" aria-label="Filtrovať log">
+        <label class="toggle" style="margin:0"><input type="checkbox" id="logPause"> Pozastaviť</label>
+      </span>
+    </h2>
+    <div class="log-body" id="log"></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  };
+
+  const STATES = {
+    sleeping: 'spí', listening: 'počúva', thinking: 'premýšľa', speaking: 'hovorí',
+    offline: 'offline', error: 'chyba', alarm: 'minútka',
+  };
+  const LISTEN = { wake: 'čaká na oslovenie', speech: 'čaká na pokračovanie', off: 'neodpočúva' };
+  const ERRORS = {
+    nothing_heard: 'nič nepočul', stt: 'rozpoznávanie zlyhalo', offline: 'bez internetu', busy: 'preťažené',
+    slow: 'Claude neodpovedal včas', broken: 'chyba', no_keys: 'chýbajú kľúče', tts: 'hlas zlyhal',
+  };
+  const LAT = [
+    ['stt', 'rozpoznanie', '#5ce1e6'],
+    ['first_token', 'Claude', '#a78bfa'],
+    ['audio', 'hlas', '#34d399'],
+  ];
+  const LEVELS = { DEBUG: 0, INFO: 0, WARNING: 1, ERROR: 2, CRITICAL: 2 };
+  const TL_WINDOW = 120;
+  const CHART_WINDOW = 15;
+  const LAT_SCALE = 4;
+  const TARGET_S = 2;
+  const MAX_LOG = 800;
+
+  let info = null;
+  let stats = null;
+  let threshold = 0.5;
+  let current = 'sleeping';
+  let currentSince = Date.now() / 1000;
+  const states = [];
+  const levels = [];
+  const logs = [];
+  let turns = 0;
+
+  const clock = (t) => new Date(t * 1000).toLocaleTimeString('sk-SK', { hour12: false });
+  const dur = (s) => {
+    s = Math.max(0, Math.round(s));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return h ? `${h} h ${m} min` : m ? `${m}:${String(sec).padStart(2, '0')}` : `${sec} s`;
+  };
+  const stateColor = (s) => `var(--s-${STATES[s] ? s : 'sleeping'})`;
+
+  // ---------------------------------------------------------------- socket
+
+  let ws = null;
+  let backoff = 1000;
+  function connect() {
+    ws = new WebSocket(`ws://${location.host}/debug`);
+    ws.onopen = () => { backoff = 1000; setConn(true); };
+    ws.onmessage = (e) => { try { handle(JSON.parse(e.data)); } catch (err) { console.error(err); } };
+    ws.onclose = () => {
+      setConn(false);
+      setTimeout(connect, backoff);
+      backoff = Math.min(backoff * 2, 10000);
+    };
+  }
+  function setConn(on) {
+    document.body.dataset.conn = String(on);
+    $('conn').dataset.on = String(on);
+    $('conn').textContent = on ? 'pripojené' : 'odpojené';
+  }
+
+  function handle(m) {
+    if (m.type === 'state') return setState(m.state);
+    if (m.type === 'status') return setStatus(m);
+    if (m.type !== 'debug') return;
+    switch (m.kind) {
+      case 'snapshot': return snapshot(m);
+      case 'state': states.push({ t: m.t, state: m.state }); trim(states, 400); return;
+      case 'turn': return addTurn(m);
+      case 'log': return addLog(m);
+      case 'level': return addLevel(m);
+      case 'stats': return setStats(m);
+    }
+  }
+
+  function trim(arr, n) { if (arr.length > n) arr.splice(0, arr.length - n); }
+
+  function snapshot(m) {
+    info = m.info || {};
+    threshold = info.wake_threshold ?? 0.5;
+    $('wakeMark').style.left = `${threshold * 100}%`;
+    renderChips();
+    states.length = 0;
+    for (const s of m.history.state || []) states.push({ t: s.t, state: s.state });
+    $('turns').textContent = '';
+    turns = 0;
+    for (const t of m.history.turn || []) addTurn(t);
+    logs.length = 0;
+    $('log').textContent = '';
+    for (const l of m.history.log || []) addLog(l);
+    const last = states[states.length - 1];
+    if (last) { current = last.state; currentSince = last.t; }
+    else states.push({ t: info.started || Date.now() / 1000, state: current });
+    renderState();
+    renderTimeline();
+  }
+
+  // ---------------------------------------------------------------- header
+
+  function renderChips() {
+    const chips = $('chips');
+    chips.textContent = '';
+    if (!info) return;
+    const add = (k, v) => {
+      const c = el('span', 'chip', `${k} `);
+      c.append(el('b', null, v));
+      chips.append(c);
+      return c;
+    };
+    add('model', `${info.model} · ${info.effort}`);
+    add('hlas', `${String(info.voice).replace(/^sk-SK-|Neural$/g, '')} · ${info.region}`);
+    add('prebudenie', `${info.wake_model} ≥ ${info.wake_threshold}`);
+    add('režim', info.mode === 'text' ? 'textový' : 'hlasový');
+    if (info.fake_brain) add('mozog', 'falošný');
+    add('PID', String(info.pid));
+    const up = add('beží', '—');
+    up.id = 'uptime';
+  }
+
+  // ---------------------------------------------------------------- state
+
+  function setState(state) {
+    if (state !== current) { current = state; currentSince = Date.now() / 1000; }
+    renderState();
+  }
+  function renderState() {
+    const b = $('state');
+    b.textContent = STATES[current] || current;
+    b.style.setProperty('--c', stateColor(current));
+  }
+
+  function renderTimeline() {
+    const now = Date.now() / 1000;
+    const from = now - TL_WINDOW;
+    const tl = $('tl');
+    tl.textContent = '';
+    const seen = new Set();
+    for (let i = 0; i < states.length; i++) {
+      const s = states[i];
+      const end = i + 1 < states.length ? states[i + 1].t : now;
+      if (end < from) continue;
+      const a = Math.max(s.t, from);
+      const seg = el('i');
+      seg.style.left = `${((a - from) / TL_WINDOW) * 100}%`;
+      seg.style.width = `${((end - a) / TL_WINDOW) * 100}%`;
+      seg.style.setProperty('--c', stateColor(s.state));
+      seg.title = `${STATES[s.state] || s.state} · ${clock(s.t)} · ${(end - s.t).toFixed(1)} s`;
+      tl.append(seg);
+      seen.add(s.state);
+    }
+    const legend = $('tlLegend');
+    legend.textContent = '';
+    for (const s of Object.keys(STATES)) {
+      if (!seen.has(s)) continue;
+      const b = el('span', 'badge', STATES[s]);
+      b.style.setProperty('--c', stateColor(s));
+      legend.append(b);
+    }
+  }
+
+  // ---------------------------------------------------------------- audio
+
+  function addLevel(m) {
+    levels.push({ t: m.t, mic: m.mic, wake: m.wake });
+    while (levels.length && levels[0].t < m.t - CHART_WINDOW) levels.shift();
+    const micPct = Math.max(0, Math.min(1, (m.mic + 60) / 60));
+    $('micBar').style.width = `${micPct * 100}%`;
+    $('micV').textContent = `${m.mic.toFixed(0)} dBFS`;
+    if (m.wake != null) {
+      $('wakeBar').style.width = `${Math.min(1, m.wake) * 100}%`;
+      $('wakeV').textContent = m.wake.toFixed(3);
+    } else {
+      $('wakeBar').style.width = '0';
+      $('wakeV').textContent = '—';
+    }
+    setListen(m.listen);
+    requestChart();
+  }
+
+  function setListen(mode) {
+    const b = $('listen');
+    b.textContent = LISTEN[mode] || '—';
+    b.style.setProperty('--c', mode === 'wake' ? 'var(--accent)' : mode === 'speech' ? 'var(--s-thinking)' : 'var(--faint)');
+  }
+
+  let chartPending = false;
+  function requestChart() {
+    if (chartPending) return;
+    chartPending = true;
+    requestAnimationFrame(() => { chartPending = false; drawChart(); });
+  }
+  function drawChart() {
+    const c = $('chart');
+    const dpr = window.devicePixelRatio || 1;
+    const w = c.clientWidth, h = c.clientHeight;
+    if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    const g = c.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    if (!levels.length) return;
+    const now = levels[levels.length - 1].t;
+    const x = (t) => w - ((now - t) / CHART_WINDOW) * w;
+    const pad = 6;
+    const y = (v) => h - pad - v * (h - pad * 2);
+
+    g.fillStyle = '#2f4a5c';
+    g.beginPath();
+    g.moveTo(x(levels[0].t), h);
+    for (const p of levels) g.lineTo(x(p.t), y(Math.max(0, Math.min(1, (p.mic + 60) / 60)) * 0.6));
+    g.lineTo(x(now), h);
+    g.closePath();
+    g.fill();
+
+    g.strokeStyle = '#ffb547';
+    g.setLineDash([4, 4]);
+    g.beginPath();
+    g.moveTo(0, y(threshold));
+    g.lineTo(w, y(threshold));
+    g.stroke();
+    g.setLineDash([]);
+
+    g.strokeStyle = '#5ce1e6';
+    g.lineWidth = 1.5;
+    g.beginPath();
+    let pen = false;
+    for (const p of levels) {
+      if (p.wake == null) { pen = false; continue; }
+      const px = x(p.t), py = y(Math.min(1, p.wake));
+      if (pen) g.lineTo(px, py); else g.moveTo(px, py);
+      pen = true;
+    }
+    g.stroke();
+  }
+
+  function setStatus(m) {
+    const err = $('micErr');
+    err.textContent = m.mic ? `Mikrofón: ${m.mic}` : '';
+    err.style.color = m.mic ? 'var(--bad)' : '';
+    renderTiles(m);
+  }
+
+  // ---------------------------------------------------------------- system
+
+  let lastStatus = { mic: null, online: true };
+  function setStats(m) {
+    stats = m;
+    setListen(m.listen);
+    renderTiles();
+    renderTemps(m.telemetry || {});
+  }
+
+  function tile(k, v, tone, small) {
+    const t = el('div', 'tile');
+    t.append(el('div', 'k', k));
+    const val = el('div', `v ${tone || ''}`, v);
+    if (small) val.append(el('small', null, ` ${small}`));
+    t.append(val);
+    return t;
+  }
+
+  function renderTiles(status) {
+    if (status) lastStatus = status;
+    const t = $('tiles');
+    t.textContent = '';
+    const s = stats;
+    t.append(
+      tile('Internet', lastStatus.online === false ? 'nie' : 'áno', lastStatus.online === false ? 'bad' : 'ok'),
+      tile('Mikrofón', lastStatus.mic ? 'chyba' : 'OK', lastStatus.mic ? 'bad' : 'ok'),
+      tile('LCD', s ? (s.faces ? `pripojené` : 'nepripojené') : '—', s ? (s.faces ? 'ok' : 'warn') : '', s && s.faces ? `(${s.faces})` : ''),
+      tile('Rozhovor', s ? (s.busy ? 'prebieha' : 'nie') : '—'),
+      tile('Stlmenie', s ? (s.ducked ? 'aktívne' : 'nie') : '—', s && s.ducked ? 'warn' : ''),
+      tile('Hlas', s ? (s.tts_streaming ? 'streamovaný' : 'po vetách') : '—', s && !s.tts_streaming ? 'warn' : ''),
+      tile('CPU', s ? `${s.cpu.toFixed(1)} %` : '—', s && s.cpu > 25 ? 'warn' : '', 'jadra'),
+      tile('Pamäť', s ? `${s.private_mb} MB` : '—', '', s ? `RSS ${s.rss_mb}` : ''),
+      tile('Vlákna', s ? String(s.threads) : '—'),
+    );
+    renderTimers();
+  }
+
+  function renderTemps(tel) {
+    const t = $('temps');
+    t.textContent = '';
+    const fmt = (v) => (typeof v === 'number' ? `${Math.round(v)} °C` : '—');
+    const keys = [['cpuTempC', 'CPU'], ['gpuTempC', 'GPU'], ['liquidTempC', 'Kvapalina']];
+    const any = keys.some(([k]) => typeof tel[k] === 'number');
+    if (!any) {
+      t.append(el('div', 'muted', 'Prídu, keď beží stránka v CAM (každých 5 s).'));
+      return;
+    }
+    for (const [k, label] of keys) t.append(tile(label, fmt(tel[k])));
+    if (typeof tel.cpuLoad === 'number') t.append(tile('Záťaž CPU', `${Math.round(tel.cpuLoad * 100)} %`));
+  }
+
+  function renderTimers() {
+    const ul = $('timers');
+    ul.textContent = '';
+    const list = (stats && stats.timers) || [];
+    if (!list.length) { ul.append(el('li', 'muted', 'Žiadne nebežia.')); return; }
+    const now = Date.now() / 1000;
+    for (const t of list) {
+      const li = el('li');
+      li.append(el('span', null, t.label || 'bez názvu'), el('span', 't', `${dur(t.due - now)} · ${clock(t.due)}`));
+      ul.append(li);
+    }
+  }
+
+  // ---------------------------------------------------------------- turns
+
+  function addTurn(m) {
+    turns++;
+    $('turnsEmpty').style.display = 'none';
+    $('turnCount').textContent = `${turns}`;
+    const tr = el('tr');
+    tr.append(el('td', 'time', clock(m.t)));
+
+    const heard = el('td', 'heard');
+    if (m.heard) heard.textContent = m.heard; else heard.append(el('span', 'muted', '—'));
+    tr.append(heard);
+
+    const reply = el('td', 'reply');
+    if (m.reply) reply.append(el('div', null, m.reply));
+    if (m.error) reply.append(el('span', 'err', ERRORS[m.error] || m.error));
+    tr.append(reply);
+
+    const tools = el('td');
+    for (const t of m.tools || []) {
+      const args = Object.entries(t.input || {}).filter(([k]) => k !== 'say').map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(' ');
+      const chip = el('span', `tool ${t.error ? 'bad' : ''}`, `${t.error ? '✗' : '✓'} ${t.name}${args ? ' ' + args : ''}`);
+      chip.title = `${t.result ?? ''}${t.input && t.input.say ? `\nsay: ${t.input.say}` : ''}`;
+      tools.append(chip);
+    }
+    tr.append(tools);
+
+    tr.append(latencyCell(m.latency || {}));
+
+    const r = m.rounds || [];
+    const sum = (k) => r.reduce((a, x) => a + (x[k] || 0), 0);
+    const tok = el('td', 'tokens');
+    if (r.length) {
+      tok.textContent = `${sum('in')} in · ${sum('out')} out`;
+      tok.append(el('div', null, `cache ${sum('cache_read')} · ${r.length}× volanie`));
+      tok.title = r.map((x) => `${x.model} ${x.stop}`).join('\n');
+    } else tok.textContent = '—';
+    tr.append(tok);
+
+    $('turns').prepend(tr);
+    while ($('turns').children.length > 60) $('turns').lastChild.remove();
+  }
+
+  function latencyCell(l) {
+    const td = el('td', 'lat');
+    const bar = el('div', 'lat-bar');
+    for (const [k, , color] of LAT) {
+      if (l[k] == null) continue;
+      const seg = el('i');
+      seg.style.width = `${(Math.min(l[k], LAT_SCALE) / LAT_SCALE) * 100}%`;
+      seg.style.background = color;
+      bar.append(seg);
+    }
+    const target = el('span', 'target');
+    target.style.left = `${(TARGET_S / LAT_SCALE) * 100}%`;
+    target.title = `cieľ ${TARGET_S} s`;
+    bar.append(target);
+    td.append(bar);
+    const nums = el('div', 'lat-nums');
+    const parts = LAT.filter(([k]) => l[k] != null).map(([k, label]) => `${label} ${l[k].toFixed(2)}`);
+    if (l.total != null) {
+      nums.append(el('b', null, `${l.total.toFixed(2)} s`));
+      nums.append(document.createTextNode(parts.length ? `  (${parts.join(' · ')})` : ''));
+    } else nums.textContent = parts.length ? parts.join(' · ') : '—';
+    td.append(nums);
+    return td;
+  }
+
+  // ---------------------------------------------------------------- log
+
+  function addLog(m) {
+    logs.push(m);
+    if (logs.length > MAX_LOG) logs.shift();
+    if ($('logPause').checked) return;
+    appendLogLine(m);
+    const body = $('log');
+    while (body.children.length > MAX_LOG) body.firstChild.remove();
+  }
+
+  function logVisible(m) {
+    const min = Number($('logLevel').value);
+    const q = $('logFilter').value.trim().toLowerCase();
+    return (LEVELS[m.level] ?? 0) >= min && (!q || `${m.name} ${m.msg}`.toLowerCase().includes(q));
+  }
+
+  function appendLogLine(m) {
+    if (!logVisible(m)) return;
+    const body = $('log');
+    const stick = body.scrollTop + body.clientHeight >= body.scrollHeight - 30;
+    const ln = el('div', 'ln');
+    ln.dataset.l = m.level;
+    ln.append(el('span', 't', clock(m.t)), el('span', 'l', m.level), el('span', 'n', m.name), el('span', 'm', m.msg));
+    ln.children[2].title = m.name;
+    body.append(ln);
+    if (stick) body.scrollTop = body.scrollHeight;
+  }
+
+  function rerenderLog() {
+    const body = $('log');
+    body.textContent = '';
+    for (const m of logs) appendLogLine(m);
+    body.scrollTop = body.scrollHeight;
+  }
+  $('logLevel').addEventListener('change', rerenderLog);
+  $('logFilter').addEventListener('input', rerenderLog);
+  $('logPause').addEventListener('change', () => { if (!$('logPause').checked) rerenderLog(); });
+
+  // ---------------------------------------------------------------- display preview
+
+  const PREVIEW_KEY = 'pitu-diag-preview';
+  function readPref() { try { return localStorage.getItem(PREVIEW_KEY) !== '0'; } catch { return true; } }
+  function writePref(on) { try { localStorage.setItem(PREVIEW_KEY, on ? '1' : '0'); } catch { /* private window */ } }
+
+  function setPreview(on) {
+    const box = $('lcd');
+    box.querySelector('iframe')?.remove();
+    $('lcdOff').style.display = on ? 'none' : '';
+    if (!on) return;
+    const url = '/display/?kraken=1';
+    const f = el('iframe');
+    f.src = url;
+    f.title = 'Náhľad displeja';
+    box.append(f);
+    fitPreview();
+  }
+  function fitPreview() {
+    const f = $('lcd').querySelector('iframe');
+    if (f) f.style.transform = `scale(${$('lcd').clientWidth / 640})`;
+  }
+  window.addEventListener('resize', () => { fitPreview(); requestChart(); });
+  $('lcdToggle').checked = readPref();
+  $('lcdToggle').addEventListener('change', (e) => { writePref(e.target.checked); setPreview(e.target.checked); });
+
+  // ---------------------------------------------------------------- ticks
+
+  setInterval(() => {
+    const now = Date.now() / 1000;
+    $('stateFor').textContent = dur(now - currentSince);
+    const up = document.getElementById('uptime');
+    if (up && info) up.lastChild.textContent = dur(now - info.started);
+    renderTimeline();
+    renderTimers();
+  }, 1000);
+
+  renderTiles();
+  renderTemps({});
+  setPreview($('lcdToggle').checked);
+  connect();
+})();
+</script>
+</body>
+</html>

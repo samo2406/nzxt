@@ -5,10 +5,16 @@ import asyncio
 import base64
 import ctypes
 import logging
+import math
+import os
 import sys
 import time
 from dataclasses import dataclass, field
 from logging.handlers import RotatingFileHandler
+from typing import Any
+
+import numpy as np
+import psutil
 
 from .audio import EARCON_ALARM, EARCON_ERROR, EARCON_WAKE, Mic, Playback, Speakers, envelope
 from .brain import Brain, BrainBusy, BrainConfigError, BrainError, BrainOffline, BrainSlow, FakeBrain
@@ -17,7 +23,7 @@ from .commands.apps import apps
 from .commands.timers import TIMERS, Timer
 from .config import DATA_DIR, Config, load_config
 from .ducking import DUCKER
-from .events import Events
+from .events import DebugLogHandler, Events
 from .face_server import FaceServer
 from .phrases import PhraseCache
 from .stt import SpeechToText, SttError
@@ -54,6 +60,18 @@ class Timings:
             f"TOTAL end-of-speech→audio {span(self.speech_end, self.audio)}"
         )
 
+    def spans(self) -> dict[str, float | None]:
+        def span(a: float | None, b: float | None) -> float | None:
+            return round(b - a, 3) if a is not None and b is not None else None
+
+        first_text = self.marks.get("first_text")
+        return {
+            "stt": span(self.speech_end, self.final),
+            "first_token": span(self.final, first_text),
+            "audio": span(first_text, self.audio),
+            "total": span(self.speech_end, self.audio),
+        }
+
 
 class TurnSpeaker:
     """Bridges one streamed reply to TTS, the speakers and the face's mouth."""
@@ -67,6 +85,10 @@ class TurnSpeaker:
         self._env_carry = b""
         self._env_frames = 0
         self._heard_audio = False
+
+    @property
+    def text(self) -> str:
+        return "".join(self._text).strip()
 
     def mark(self, name: str) -> None:
         self._timings.marks.setdefault(name, time.monotonic())
@@ -156,6 +178,9 @@ class Assistant:
         # A conversation and a ringing timer never share the speakers.
         self._turn_lock = asyncio.Lock()
         DUCKER.level = cfg.duck_level
+        self._started = time.time()
+        self._proc = psutil.Process()
+        self._wake_score: tuple[float, float] = (0.0, 0.0)
 
         sim = args.simulate
         if sim in ("offline", "claude-slow") and isinstance(self.brain, Brain):
@@ -188,16 +213,36 @@ class Assistant:
         await self._play(pcm or EARCON_ERROR, state=None)
         await asyncio.sleep(1.2)
 
+    def record_turn(self, heard: str | None, timings: Timings, reply: str = "", error: str | None = None) -> None:
+        brain = self.brain.last_turn
+        self.events.debug(
+            "turn",
+            heard=heard,
+            reply=reply,
+            error=error,
+            latency=timings.spans(),
+            rounds=brain["rounds"],
+            tools=brain["tools"],
+        )
+
     async def reply(self, text: str, timings: Timings) -> bool:
+        self.brain.last_turn = {"rounds": [], "tools": []}
+        speaker = TurnSpeaker(self, timings)
+        error = await self._reply(text, speaker)
+        self.record_turn(text, timings, speaker.text, error)
+        if error is None:
+            log.info(timings.report())
+        return error is None
+
+    async def _reply(self, text: str, speaker: TurnSpeaker) -> str | None:
         if not isinstance(self.brain, FakeBrain) and not self.cfg.has_anthropic:
             log.error("ANTHROPIC_API_KEY missing in agent/.env")
             await self.say_phrase("no_keys")
-            return False
+            return "no_keys"
         if not self.print_only and not self.cfg.has_azure:
             log.error("AZURE_SPEECH_KEY / AZURE_SPEECH_REGION missing in agent/.env (use --no-tts to test without)")
             await self.say_phrase("no_keys")
-            return False
-        speaker = TurnSpeaker(self, timings)
+            return "no_keys"
         try:
             await self.brain.respond(text, speaker)
             await speaker.finish()
@@ -208,15 +253,75 @@ class Assistant:
             if isinstance(err, BrainConfigError):
                 log.error("check ANTHROPIC_API_KEY / PITU_MODEL in agent/.env")
             await self.say_phrase(key)
-            return False
+            return key
         except TtsError as err:
             speaker.abort()
             log.warning("tts failed: %s", err)
             self.tts.reset()
             await self.say_phrase("offline")
-            return False
-        log.info(timings.report())
-        return True
+            return "tts"
+        return None
+
+    # ------------------------------------------------------------ diagnostics
+
+    def info(self) -> dict[str, Any]:
+        c = self.cfg
+        return {
+            "mode": "text" if self.args.text else "voice",
+            "fake_brain": self.args.fake_brain,
+            "print_only": self.print_only,
+            "model": c.claude_model,
+            "effort": c.claude_effort,
+            "voice": c.tts_voice,
+            "rate": c.tts_rate,
+            "region": c.azure_region,
+            "wake_model": c.wake_model,
+            "wake_threshold": c.wake_threshold,
+            "follow_up_s": c.follow_up_s,
+            "end_silence_ms": c.end_silence_ms,
+            "duck_level": c.duck_level,
+            "has_azure": c.has_azure,
+            "has_anthropic": c.has_anthropic,
+            "commands": list(self.registry.commands),
+            "started": self._started,
+            "pid": os.getpid(),
+        }
+
+    def stats(self) -> dict[str, Any]:
+        proc = self._proc
+        with proc.oneshot():
+            mem = proc.memory_info()
+            cpu = proc.cpu_percent(None)
+            threads = proc.num_threads()
+        return {
+            "cpu": round(cpu, 1),
+            "rss_mb": round(mem.rss / 2**20),
+            "private_mb": round(getattr(mem, "private", mem.rss) / 2**20),
+            "threads": threads,
+            "listen": self.listener.mode if self.listener is not None else None,
+            "busy": self._turn_lock.locked(),
+            "ducked": DUCKER.active,
+            "timers": [{"label": t.label, "due": t.due} for t in TIMERS.active()],
+            "tts_streaming": self.tts.streaming,
+        }
+
+    def _on_score(self, score: float) -> None:
+        self._wake_score = (score, time.monotonic())
+        if self.args.wake_test:
+            print(f"\rscore {score:0.3f} " + "#" * int(score * 40), end="  ", flush=True)
+
+    def _meter(self, _index: int, frame: np.ndarray) -> None:
+        if not self.events.debug_clients or self.listener is None:
+            return
+        rms = float(np.sqrt(np.mean(frame.astype(np.float32) ** 2)))
+        score, at = self._wake_score
+        fresh = time.monotonic() - at < 0.3
+        self.events.debug(
+            "level",
+            mic=round(20 * math.log10(max(rms, 1.0) / 32768), 1),
+            wake=round(score, 3) if fresh else None,
+            listen=self.listener.mode,
+        )
 
     # ------------------------------------------------------------------ voice
 
@@ -229,8 +334,8 @@ class Assistant:
         self.listener = Listener(self.mic, self.cfg.wake_model, self.cfg.wake_threshold)
         self.listener.on_wake = lambda i, _s: loop.call_soon_threadsafe(self._wake_q.put_nowait, i)
         self.listener.on_speech = lambda i: loop.call_soon_threadsafe(self._speech_q.put_nowait, i)
-        if self.args.wake_test:
-            self.listener.on_score = lambda s: print(f"\rscore {s:0.3f} " + "#" * int(s * 40), end="  ", flush=True)
+        self.listener.on_score = self._on_score
+        self.mic.subscribe(self._meter)
         self.mic.start()
         self.listener.start()
         self.listener.set_mode("wake")
@@ -284,10 +389,12 @@ class Assistant:
                 )
             except SttError as err:
                 log.warning("stt failed: %s", err)
+                self.record_turn(None, timings, error="stt")
                 await self.say_phrase("offline")
                 return
             if heard is None:
                 log.info("nothing heard")
+                self.record_turn(None, timings, error="nothing_heard")
                 return
             timings.final = time.monotonic()
             timings.speech_end = heard.speech_end
@@ -402,7 +509,7 @@ def _setup_logging(verbose: bool) -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         handlers=handlers,
     )
-    for noisy in ("httpx", "httpcore", "anthropic", "websockets"):
+    for noisy in ("httpx", "httpx2", "httpcore", "httpcore2", "anthropic", "websockets"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
@@ -450,7 +557,8 @@ async def _amain(args: argparse.Namespace) -> None:
         "starting: model=%s effort=%s voice=%s wake=%s",
         cfg.claude_model, cfg.claude_effort, cfg.tts_voice, cfg.wake_model,
     )
-    app.face = FaceServer(app.events, cfg.face_port, cfg.allowed_origins)
+    logging.getLogger().addHandler(DebugLogHandler(app.events))
+    app.face = FaceServer(app.events, cfg.face_port, cfg.allowed_origins, info=app.info, stats=app.stats)
     try:
         await app.face.start()
     except OSError as err:

@@ -95,7 +95,7 @@ TIMERS = TimerStore()
 
 
 def _clock(epoch: float) -> str:
-    return datetime.fromtimestamp(epoch).strftime("%H:%M:%S")
+    return datetime.fromtimestamp(epoch).strftime("%H:%M")
 
 
 @command(

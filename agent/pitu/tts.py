@@ -146,6 +146,10 @@ class TextToSpeech:
         self._on_audio: Callable[[bytes], None] = lambda _b: None
         self.simulate_failure = False
 
+    @property
+    def streaming(self) -> bool:
+        return self._streaming
+
     def _synthesizer(self) -> speechsdk.SpeechSynthesizer:
         if self._synth is None:
             synth = speechsdk.SpeechSynthesizer(
