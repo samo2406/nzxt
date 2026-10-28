@@ -92,7 +92,8 @@ class SpeechToText:
             recognizer.recognizing.connect(lambda e: on_partial(strip_wake_phrase(e.result.text)))
 
         try:
-            speechsdk.Connection.from_recognizer(recognizer).open(True)
+            # False = single-shot; a connection opened for continuous recognition makes recognize_once fail.
+            speechsdk.Connection.from_recognizer(recognizer).open(False)
             future = recognizer.recognize_once_async()
 
             last = start_index - 1
