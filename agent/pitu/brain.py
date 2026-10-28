@@ -25,8 +25,10 @@ CACHE = {"type": "ephemeral", "ttl": "1h"}
 REFRESH_EVERY_S = 50 * 60
 MEMORY_S = 180.0
 # Runs on Anthropic's side. No country: the API rejects "SK" as a location.
+# Not web_search_20260209: its dynamic filtering adds ~3k tokens to every request
+# and ~6k to each search, for no better answers on Haiku (measured).
 WEB_SEARCH = {
-    "type": "web_search_20260209",
+    "type": "web_search_20250305",
     "name": "web_search",
     "max_uses": 3,
     "user_location": {"type": "approximate", "timezone": "Europe/Bratislava"},
