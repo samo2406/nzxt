@@ -5,8 +5,9 @@
   transition: opacity 400ms ease;
 }
 
-/* The music screen carries no text at all, temperatures included. */
-.screen[data-screen='spotify'] .info {
+/* The music screen and the face carry no text at all, temperatures included. */
+.screen[data-screen='spotify'] .info,
+.screen[data-screen='face'] .info {
   opacity: 0;
 }
 

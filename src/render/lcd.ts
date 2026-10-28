@@ -1,10 +1,13 @@
 import type { DisplayMetrics } from '../core/display';
 import { ScreenState } from '../core/state';
+import { AssistantLink, type AssistantMessage, type AssistantSource } from '../data/assistant';
+import { MockAssistant } from '../data/assistant-mock';
 import { installMonitoring, type Telemetry } from '../data/nzxt';
 import type { PlayerSource } from '../data/player';
-import { getSettings, onSettingsChange } from '../data/settings';
+import { getSettings, onSettingsChange, type Settings } from '../data/settings';
 import { isConnected, onAuthChange, SpotifyPlayer } from '../data/spotify';
 import { WeatherSource } from '../data/weather';
+import { FaceView } from './face';
 import { InfoOverlay } from './overlay';
 import { Screen } from './screen';
 import { SlideshowView } from './slideshow';
@@ -49,6 +52,7 @@ export async function mountLcd(
   installMonitoring((data) => {
     sawMonitoring = true;
     overlay.update(data);
+    forwardTelemetry(data);
   });
   const sampleTimer = options.sampleTelemetryIfSilent
     ? window.setTimeout(() => {
@@ -64,15 +68,36 @@ export async function mountLcd(
   screen.register('slideshow', slideshow);
   screen.register('spotify', vinyl);
 
+  const face = new FaceView(settings);
+  screen.register('face', face);
+
   const state = new ScreenState(settings.spotify.fallbackMs);
-  state.onChange((name) => screen.show(name));
+  const assistant = new AssistantController(screen, state, face, options.mock === true);
+  state.onChange((name) => {
+    if (!assistant.active) screen.show(name);
+  });
   screen.show('slideshow');
+  assistant.sync(settings);
+
+  let lastTelemetrySent = 0;
+  const forwardTelemetry = (t: Telemetry): void => {
+    const now = Date.now();
+    if (now - lastTelemetrySent < TELEMETRY_FORWARD_MS) return;
+    lastTelemetrySent = now;
+    const data: Record<string, number> = {};
+    for (const [key, value] of Object.entries(t)) {
+      if (typeof value === 'number' && Number.isFinite(value)) data[key] = value;
+    }
+    assistant.sendTelemetry(data);
+  };
 
   const offSettings = onSettingsChange((next) => {
     overlay.applySettings(next);
     weather.sync(next.weather);
     slideshow.applySettings(next);
     vinyl.applySettings(next);
+    face.applySettings(next);
+    assistant.sync(next);
     state.setFallbackMs(next.spotify.fallbackMs);
   });
 
@@ -115,11 +140,112 @@ export async function mountLcd(
       offAuth();
       offPlayerSettings();
       player?.stop();
+      assistant.destroy();
       weather.destroy();
       overlay.destroy();
       screen.destroy();
     },
   };
+}
+
+const TELEMETRY_FORWARD_MS = 5000;
+/** The face closes its eyes before the screen is handed back. */
+const HAND_BACK_DELAY_MS = 700;
+/** A turn that goes silent this long (agent crashed mid-sentence) gives the screen back. */
+const STALE_TURN_MS = 45_000;
+
+/**
+ * Lets the voice assistant take the screen over the slideshow/music logic:
+ * any non-sleeping state shows the face; 'sleeping' closes the eyes and hands
+ * the screen back to whatever ScreenState currently wants.
+ */
+class AssistantController {
+  active = false;
+  private source: AssistantSource | null = null;
+  private signature = '';
+  private handBackTimer = 0;
+  private staleTimer = 0;
+  private offs: (() => void)[] = [];
+
+  constructor(
+    private readonly screen: Screen,
+    private readonly state: ScreenState,
+    private readonly face: FaceView,
+    private readonly mock: boolean,
+  ) {}
+
+  sync(settings: Settings): void {
+    const { enabled, port } = settings.assistant;
+    const signature = enabled ? `${this.mock ? 'mock' : 'ws'}:${port}` : '';
+    if (signature === this.signature) return;
+    this.signature = signature;
+    this.teardown();
+    if (!enabled) return;
+
+    const source: AssistantSource = this.mock ? new MockAssistant() : new AssistantLink(port);
+    this.offs.push(
+      source.onMessage((msg) => this.onMessage(msg)),
+      source.onConnection((connected) => {
+        if (!connected) this.sleep();
+      }),
+    );
+    this.source = source;
+    source.start();
+  }
+
+  sendTelemetry(data: Record<string, number>): void {
+    this.source?.sendTelemetry(data);
+  }
+
+  private onMessage(msg: AssistantMessage): void {
+    this.face.handle(msg);
+    if (msg.type === 'status') return;
+    if (msg.type === 'state') {
+      if (msg.state === 'sleeping') this.scheduleHandBack();
+      else this.takeOver();
+    }
+    if (this.active) {
+      clearTimeout(this.staleTimer);
+      this.staleTimer = window.setTimeout(() => this.sleep(), STALE_TURN_MS);
+    }
+  }
+
+  private takeOver(): void {
+    clearTimeout(this.handBackTimer);
+    this.handBackTimer = 0;
+    this.active = true;
+    this.screen.show('face');
+  }
+
+  private scheduleHandBack(): void {
+    if (!this.active || this.handBackTimer) return;
+    this.handBackTimer = window.setTimeout(() => {
+      this.handBackTimer = 0;
+      this.active = false;
+      clearTimeout(this.staleTimer);
+      this.screen.show(this.state.current);
+    }, HAND_BACK_DELAY_MS);
+  }
+
+  private sleep(): void {
+    if (!this.active) return;
+    this.face.handle({ type: 'state', state: 'sleeping' });
+    this.scheduleHandBack();
+  }
+
+  private teardown(): void {
+    for (const off of this.offs) off();
+    this.offs = [];
+    this.source?.stop();
+    this.source = null;
+    this.sleep();
+  }
+
+  destroy(): void {
+    this.teardown();
+    clearTimeout(this.handBackTimer);
+    clearTimeout(this.staleTimer);
+  }
 }
 
 function wirePlayer(player: PlayerSource, state: ScreenState, vinyl: VinylView): void {

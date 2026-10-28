@@ -1,4 +1,5 @@
-export type ScreenName = 'slideshow' | 'spotify';
+/** 'face' is never chosen here: the assistant overrides this from lcd.ts. */
+export type ScreenName = 'slideshow' | 'spotify' | 'face';
 
 /**
  * Decides which screen is visible. The only authority is the Spotify poller:

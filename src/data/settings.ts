@@ -27,6 +27,12 @@ export interface Settings {
     lat: number;
     lon: number;
   };
+  assistant: {
+    enabled: boolean;
+    port: number;
+    /** CAM streams the LCD with a delay; the mouth moves this much ahead of the audio clock. */
+    mouthLeadMs: number;
+  };
 }
 
 export const DEFAULTS: Settings = {
@@ -50,6 +56,11 @@ export const DEFAULTS: Settings = {
     place: '',
     lat: 0,
     lon: 0,
+  },
+  assistant: {
+    enabled: true,
+    port: 8765,
+    mouthLeadMs: 100,
   },
 };
 

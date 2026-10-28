@@ -15,6 +15,7 @@ from .brain import Brain, BrainBusy, BrainConfigError, BrainError, BrainOffline,
 from .commands import Registry
 from .config import DATA_DIR, Config, load_config
 from .events import Events
+from .face_server import FaceServer
 from .phrases import PhraseCache
 from .stt import SpeechToText, SttError
 from .tts import TextToSpeech, TtsError, Utterance
@@ -143,6 +144,7 @@ class Assistant:
         self.phrases = PhraseCache(cfg, self.tts)
         self.mic: Mic | None = None
         self.listener = None
+        self.face: FaceServer | None = None
         self._wake_q: asyncio.Queue[int] = asyncio.Queue()
         self._speech_q: asyncio.Queue[int] = asyncio.Queue()
 
@@ -366,6 +368,11 @@ async def _amain(args: argparse.Namespace) -> None:
         "starting: model=%s effort=%s voice=%s wake=%s",
         cfg.claude_model, cfg.claude_effort, cfg.tts_voice, cfg.wake_model,
     )
+    app.face = FaceServer(app.events, cfg.face_port, cfg.allowed_origins)
+    try:
+        await app.face.start()
+    except OSError as err:
+        log.error("face server could not bind port %d: %s", cfg.face_port, err)
     if args.text:
         await app.run_text()
     else:

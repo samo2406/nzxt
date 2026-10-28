@@ -1,0 +1,309 @@
+.face {
+  --face-ink: #eef3f8;
+  --face-accent: #5ce1e6;
+  --face-spring: cubic-bezier(0.3, 1.45, 0.5, 1);
+
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 42%, #0d1418 0%, #050506 62%);
+  overflow: hidden;
+}
+
+.face[data-state='alarm'] {
+  --face-accent: #ff9b3d;
+}
+
+.face[data-state='offline'],
+.face[data-state='error'] {
+  --face-accent: #6b7a8f;
+}
+
+/* Takeover is quick; the hand-back waits for the screen underneath to fade
+   in first, so the swap never dips through black. */
+.face.view {
+  transition: opacity 160ms ease;
+}
+
+.face.view[data-active='false'] {
+  transition: opacity 450ms ease 600ms;
+}
+
+/* -------------------------------------------------------------------- ring */
+
+.face__ring,
+.face__glow {
+  position: absolute;
+  inset: 3.5%;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+.face__ring {
+  border: calc(3px * var(--u)) solid var(--face-accent);
+  opacity: 0.18;
+}
+
+.face__glow {
+  box-shadow:
+    0 0 calc(40px * var(--u)) calc(6px * var(--u)) color-mix(in srgb, var(--face-accent) 55%, transparent),
+    inset 0 0 calc(40px * var(--u)) calc(4px * var(--u)) color-mix(in srgb, var(--face-accent) 35%, transparent);
+  opacity: 0;
+}
+
+.face[data-state='listening'] .face__ring,
+.face[data-state='speaking'] .face__ring,
+.face[data-state='alarm'] .face__ring {
+  opacity: 0.85;
+}
+
+.face[data-state='thinking'] .face__ring {
+  opacity: 0.4;
+}
+
+.face[data-state='listening'] .face__glow {
+  opacity: 0.8;
+}
+
+.face[data-state='speaking'] .face__glow {
+  opacity: 0.35;
+}
+
+/* ------------------------------------------------------------------- orbit */
+
+.face__orbit {
+  position: absolute;
+  inset: 3.5%;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.face__dot {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: calc(16px * var(--u));
+  height: calc(16px * var(--u));
+  margin: calc(-8px * var(--u)) 0 0 calc(-8px * var(--u));
+  border-radius: 50%;
+  background: var(--face-accent);
+  box-shadow: 0 0 calc(14px * var(--u)) var(--face-accent);
+}
+
+.face[data-state='thinking'] .face__orbit {
+  opacity: 1;
+}
+
+/* -------------------------------------------------------------------- head */
+
+.face__head {
+  position: absolute;
+  inset: 0;
+  transition: transform 500ms var(--face-spring);
+}
+
+.face[data-state='listening'] .face__head {
+  transform: translateY(-2%) scale(1.04);
+}
+
+.face__eye {
+  position: absolute;
+  top: 44%;
+  width: calc(76px * var(--u));
+  height: calc(136px * var(--u));
+  margin: calc(-68px * var(--u)) 0 0 calc(-38px * var(--u));
+  transition: transform 380ms var(--face-spring);
+}
+
+.face__eye--l {
+  left: 35%;
+}
+
+.face__eye--r {
+  left: 65%;
+}
+
+.face__eye-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: calc(38px * var(--u));
+  background: var(--face-ink);
+}
+
+.face__mouth {
+  position: absolute;
+  left: 50%;
+  top: 68%;
+  width: calc(150px * var(--u));
+  height: calc(66px * var(--u));
+  margin: calc(-33px * var(--u)) 0 0 calc(-75px * var(--u));
+  transition:
+    transform 380ms var(--face-spring),
+    opacity 300ms ease;
+}
+
+.face__mouth-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: calc(33px * var(--u));
+  background: var(--face-ink);
+  transform: scaleY(0.14);
+}
+
+/* ------------------------------------------------------------------ states */
+
+.face[data-state='sleeping'] .face__eye {
+  transform: translateY(18%) scaleY(0.07);
+  transition-duration: 600ms;
+  transition-timing-function: ease;
+}
+
+.face[data-state='sleeping'] .face__mouth {
+  transform: scaleX(0.45);
+  opacity: 0.5;
+}
+
+.face[data-state='listening'] .face__eye {
+  transform: scale(1.08);
+}
+
+.face[data-state='listening'] .face__mouth {
+  transform: scaleX(0.35);
+}
+
+.face[data-state='listening'] .face__mouth-inner {
+  transform: scaleY(0.4);
+}
+
+.face[data-state='thinking'] .face__eye {
+  transform: translate(14%, -12%) scaleY(0.8);
+}
+
+.face[data-state='thinking'] .face__mouth {
+  transform: translateX(14%) scaleX(0.3);
+}
+
+.face[data-state='speaking'] .face__eye {
+  transform: scaleY(0.94);
+}
+
+.face[data-state='offline'] .face__eye--l,
+.face[data-state='error'] .face__eye--l {
+  transform: rotate(-14deg) scaleY(0.38);
+}
+
+.face[data-state='offline'] .face__eye--r,
+.face[data-state='error'] .face__eye--r {
+  transform: rotate(14deg) scaleY(0.38);
+}
+
+.face[data-state='offline'] .face__mouth,
+.face[data-state='error'] .face__mouth {
+  transform: scaleX(0.4);
+  opacity: 0.6;
+}
+
+.face[data-state='alarm'] .face__eye {
+  transform: scale(1.16);
+}
+
+.face[data-state='alarm'] .face__mouth-inner {
+  transform: scaleY(0.6);
+}
+
+/* ------------------------------------------------------------------- badge */
+
+.face__badge {
+  position: absolute;
+  left: 50%;
+  top: 84%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-ui);
+  font-size: calc(30px * var(--u));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--face-accent);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.face[data-state='offline'] .face__badge,
+.face[data-state='error'] .face__badge {
+  opacity: 1;
+}
+
+/* -------------------------------------------- idle motion (only on screen) */
+
+.face[data-active='true'][data-state='sleeping'] .face__head {
+  animation: face-breathe 4.5s ease-in-out infinite;
+}
+
+.face[data-active='true']:is([data-state='listening'], [data-state='thinking'], [data-state='speaking']) .face__eye-inner {
+  animation: face-blink 5.3s infinite;
+}
+
+.face[data-active='true'][data-state='thinking'] .face__orbit {
+  animation: face-orbit 1.4s linear infinite;
+}
+
+.face[data-active='true'][data-state='listening'] .face__glow {
+  animation: face-pulse 1.8s ease-in-out infinite;
+}
+
+.face[data-active='true'][data-state='alarm'] .face__glow {
+  opacity: 1;
+  animation: face-pulse 0.6s ease-in-out infinite;
+}
+
+.face[data-active='true'][data-state='alarm'] .face__head {
+  animation: face-shake 0.9s ease-in-out infinite;
+}
+
+@keyframes face-breathe {
+  50% {
+    transform: scale(1.018);
+  }
+}
+
+@keyframes face-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes face-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes face-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes face-shake {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-3deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .face * {
+    animation: none !important;
+  }
+}

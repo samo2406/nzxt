@@ -1,3 +1,4 @@
+import { AssistantLink } from '../data/assistant';
 import { getSettings, updateSettings } from '../data/settings';
 import { redirectUri } from '../data/spotify';
 import { geocode } from '../data/weather';
@@ -118,6 +119,56 @@ function weatherPanel(): HTMLElement {
   );
 }
 
+function assistantPanel(): HTMLElement {
+  const a = getSettings().assistant;
+  const status = el('span', { class: 'status' });
+  const mic = el('span', { class: 'status' });
+  let link: AssistantLink | null = null;
+
+  const render = (connected: boolean): void => {
+    if (!getSettings().assistant.enabled) {
+      status.dataset.tone = 'idle';
+      status.textContent = 'Vypnutý';
+      return;
+    }
+    status.dataset.tone = connected ? 'ok' : 'warn';
+    status.textContent = connected ? 'Agent beží' : 'Agent nebeží — spustite ho na PC';
+  };
+
+  const connect = (): void => {
+    link?.stop();
+    link = null;
+    mic.textContent = '';
+    const s = getSettings().assistant;
+    render(false);
+    if (!s.enabled) return;
+    link = new AssistantLink(s.port);
+    link.onConnection(render);
+    link.onMessage((msg) => {
+      if (msg.type !== 'status') return;
+      mic.dataset.tone = msg.mic ? 'warn' : 'ok';
+      mic.textContent = msg.mic ? `Mikrofón: ${msg.mic}` : 'Mikrofón v poriadku';
+    });
+    link.start();
+  };
+
+  connect();
+  return section(
+    'Asistent Piťu',
+    'Tvár hlasového asistenta. Keď ho oslovíte („Hej Piťu“), prevezme displej a po rozhovore ho vráti. Agent beží na tomto PC (priečinok agent/).',
+    el('div', { class: 'row' }, status, mic),
+    toggleField('Zobrazovať tvár asistenta', a.enabled, (enabled) => {
+      updateSettings({ assistant: { enabled } });
+      connect();
+    }),
+    rangeField(
+      'Predstih úst',
+      { min: -200, max: 400, step: 20, value: a.mouthLeadMs, format: (v) => `${v} ms` },
+      (mouthLeadMs) => updateSettings({ assistant: { mouthLeadMs } }),
+    ),
+  );
+}
+
 function setupPanel(): HTMLElement {
   const steps = [
     'V CAM otvorte Lighting → Kraken → LCD Display.',
@@ -154,6 +205,7 @@ export function mountConfig(host: HTMLElement): void {
     slideshowPanel(),
     telemetryPanel(),
     weatherPanel(),
+    assistantPanel(),
     setupPanel(),
   );
 
