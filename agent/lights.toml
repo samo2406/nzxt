@@ -3,8 +3,29 @@
 #
 # Yeelight: v aplikácii Yeelight Classic musí byť pri svetle zapnuté „LAN Control“.
 # `id` ho nájde, aj keď mu router pridelí inú IP adresu.
+#
+# Tuya (Immax NEO, Smart Life): lokálny kľúč je v .env ako TUYA_KEY_<id>.
+# Po novom spárovaní sa kľúč zmení. IP adresu je dobré zamknúť v routeri.
+#
+# Skupina: `members` sú názvy svetiel vyššie, prepnú sa naraz.
 
 [lights."posteľ"]
 type = "yeelight"
 host = "192.168.100.12"
 id = "0x000000001fb58f84"
+
+[lights."obývačka hore"]
+type = "tuya"
+host = "192.168.100.23"
+id = "bf187ff4338b74e5e97uty"
+version = 3.5
+
+[lights."obývačka dole"]
+type = "tuya"
+host = "192.168.100.24"
+id = "bfdd00847f54ff188eayvw"
+version = 3.5
+
+[lights."obývačka"]
+type = "group"
+members = ["obývačka hore", "obývačka dole"]

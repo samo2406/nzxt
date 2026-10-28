@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import colorsys
 import json
 import logging
+import os
 import socket
 import time
 import tomllib
+from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Any, Literal
+
+import tinytuya
 
 from ..config import LIGHTS_PATH
 from . import Choices, CommandError, command
@@ -102,6 +107,71 @@ class Yeelight:
                     raise CommandError("Svetlo ten príkaz odmietlo.") from RuntimeError(reply["error"])
 
 
+class Tuya:
+    """Tuya Wi-Fi bulbs (Immax NEO, Smart Life) over the LAN with the device's local key."""
+
+    def __init__(self, name: str, host: str, device_id: str, version: float) -> None:
+        key = os.environ.get(f"TUYA_KEY_{device_id}", "")
+        if not key:
+            raise CommandError(f"Svetlu {name} chýba kľúč v nastaveniach.")
+        self._name = name
+        self._dev = tinytuya.BulbDevice(
+            device_id, host, key, version=version,
+            connection_timeout=1.5, connection_retry_limit=2, connection_retry_delay=0.2,
+        )
+
+    def _check(self, reply: Any) -> dict:
+        if not isinstance(reply, dict) or "Error" in reply:
+            log.warning("tuya %s: %s", self._name, reply)
+            raise CommandError(f"Svetlo {self._name} nedosiahnem. Je zapnuté vo vypínači?")
+        return reply
+
+    def run(self, on: bool, brightness: int, color: str) -> None:
+        if not on:
+            self._check(self._dev.set_value(20, False))
+            return
+        dps: dict[str, Any] = {"20": True}
+        bright = max(10, min(1000, brightness * 10)) if brightness else 0
+        if color in WHITES:
+            # temp_value 0..1000 spans the bulb's 2700..6500 K.
+            dps.update({"21": "white", "23": round((WHITES[color] - 2700) / 3800 * 1000)})
+            if bright:
+                dps["22"] = bright
+        elif color in COLORS or bright:
+            state = self._check(self._dev.status()).get("dps", {})
+            colour_mode = state.get("21") == "colour"
+            if color in COLORS:
+                rgb = COLORS[color]
+                h, s, _ = colorsys.rgb_to_hsv(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255)
+                v = bright or (int(str(state.get("24", ""))[8:12] or "3e8", 16) if colour_mode else state.get("22", 1000))
+                dps.update({"21": "colour", "24": f"{round(h * 360):04x}{round(s * 1000):04x}{v:04x}"})
+            elif colour_mode:
+                dps["24"] = str(state.get("24", "000003e803e8"))[:8] + f"{bright:04x}"
+            else:
+                dps["22"] = bright
+        self._check(self._dev.set_multiple_values(dps))
+
+
+def _run(name: str, on: bool, brightness: int, color: str) -> None:
+    cfg = lights().get(name)
+    if not cfg:
+        raise CommandError("Také svetlo nepoznám.")
+    kind = cfg.get("type")
+    if kind == "yeelight":
+        Yeelight(name, str(cfg.get("host", "")), str(cfg.get("id", ""))).run(_calls(on, brightness, color))
+    elif kind == "tuya":
+        Tuya(name, str(cfg.get("host", "")), str(cfg.get("id", "")), float(cfg.get("version", 3.3))).run(on, brightness, color)
+    elif kind == "group":
+        members = [str(m) for m in cfg.get("members", [])]
+        with ThreadPoolExecutor(len(members) or 1) as pool:
+            futures = [pool.submit(_run, m, on, brightness, color) for m in members]
+        errors = [f.exception() for f in futures if f.exception()]
+        if errors:
+            raise errors[0]
+    else:
+        raise CommandError("Tento druh svetla zatiaľ ovládať neviem.")
+
+
 def _calls(on: bool, brightness: int, color: str) -> list[tuple[str, list[Any]]]:
     if not on:
         return [("set_power", ["off", "smooth", FADE_MS])]
@@ -117,7 +187,8 @@ def _calls(on: bool, brightness: int, color: str) -> list[tuple[str, list[Any]]]
 
 @command(
     "Ovláda svetlá: zapne, vypne, nastaví jas alebo farbu. Rozumej aj voľným formuláciám "
-    "(„rozsviet pri posteli“, „stlm posteľ na desať percent“, „daj tam niečo modré“)."
+    "(„rozsviet pri posteli“, „stlm posteľ na desať percent“, „daj tam niečo modré“). "
+    "Keď povie len „obývačka“ alebo „svetlo v obývačke“, myslí obe svetlá v obývačke."
 )
 def light(
     name: Annotated[str, Choices(names)],
@@ -125,11 +196,6 @@ def light(
     brightness: Annotated[int, "jas 1 až 100; 0 = nemeniť"],
     color: Annotated[Color, "farba; „nemeniť“, ak o farbe nehovorí"],
 ) -> str:
-    cfg = lights().get(name)
-    if not cfg:
-        raise CommandError("Také svetlo nepoznám.")
-    if cfg.get("type") != "yeelight":
-        raise CommandError("Tento druh svetla zatiaľ ovládať neviem.")
-    Yeelight(name, str(cfg.get("host", "")), str(cfg.get("id", ""))).run(_calls(on, brightness, color))
+    _run(name, on, brightness, color)
     return f"{name}: {'on' if on else 'off'}" + (f", {brightness} %" if on and brightness else "") + (
         f", {color}" if on and color != "nemeniť" else "")
