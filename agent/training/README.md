@@ -41,5 +41,6 @@ Synthetic voices plus 64 of Samo's takes:
 - **Other voices:** 99.6 % of held-out synthetic voices woke it through the streaming path.
 - **False wakes:** 0 in the 4.3 h held-out part of the validation set (conversation, music, noise). Stock "Hey Jarvis" gets 0.47/h on the same audio.
 - **Near-misses:** about 2 % of deliberately close phrases ("Hej Peťo") wake it, and 0 of 3 of your held-out ones.
+- **Cut off mid-word:** your held-out takes stopped at 45 % ("Hej P…") wake it 0 of 16 times (before cut-off training: 10 of 16); stopped at 60 % ("Hej Pit…"), 2 of 16.
 
 Sixteen takes is a small test, so the diagnostics page's wake score in daily use is the real verdict.

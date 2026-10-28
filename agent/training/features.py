@@ -158,6 +158,8 @@ class Take:
     block: str
     kind: str
     index: int
+    start: int
+    """Sample where the voice in this take starts."""
     end: int
     """Sample where the voice in this take stops."""
     audio: np.ndarray
@@ -186,7 +188,12 @@ def recorded_takes() -> list[Take]:
             if not voiced:
                 print(f"  {meta_path.stem} take {i + 1}: no voice found, skipped", flush=True)
                 continue
-            takes.append(Take(meta_path.stem, meta["kind"], i, start + (voiced[-1] + 1) * frame, audio))
+            first = len(voiced) - 1
+            # Walk back over the short pause in "Hej, Piťu", but not to a previous take spilling into the slot.
+            while first > 0 and voiced[first] - voiced[first - 1] <= 8:
+                first -= 1
+            takes.append(Take(meta_path.stem, meta["kind"], i, start + voiced[first] * frame,
+                              start + (voiced[-1] + 1) * frame, audio))
     return takes
 
 
@@ -207,6 +214,33 @@ def light(window: np.ndarray, babble: np.ndarray | None) -> np.ndarray:
 
 def take_windows(takes: list[Take], copies: int, babble: np.ndarray | None) -> np.ndarray:
     windows = [light(real_window(t.audio, t.end + int(rng.uniform(0, 0.2) * RATE)), babble)
+               for t in takes for _ in range(copies)]
+    return np.stack(windows) if windows else np.zeros((0, WINDOW), dtype=np.float32)
+
+
+def cut_point(start: int, end: int) -> int:
+    """Somewhere in "Hej P…" to "Hej Pi…": the phrase begun but not finished."""
+    return start + int((end - start) * rng.uniform(0.4, 0.65))
+
+
+def partial_clip_windows(sources: list[np.ndarray], copies: int, babble: np.ndarray | None) -> np.ndarray:
+    return np.stack([augment(place(clip[: cut_point(0, len(clip))], 0.45), babble)
+                     for clip in sources for _ in range(copies)])
+
+
+def room_tone(t: Take, length: int) -> np.ndarray:
+    """The block's quiet lead-in, before the first prompt."""
+    offset = rng.integers(0, max(1, RATE * 2 - length))
+    return t.audio[offset : offset + length]
+
+
+def stopped_window(t: Take, cut: int, silence: int) -> np.ndarray:
+    """You stop at `cut` and the room goes quiet for `silence` samples."""
+    return np.concatenate([real_window(t.audio, cut)[silence:], room_tone(t, silence)])
+
+
+def partial_take_windows(takes: list[Take], copies: int, babble: np.ndarray | None) -> np.ndarray:
+    windows = [light(stopped_window(t, cut_point(t.start, t.end), int(rng.uniform(0, 0.45) * RATE)), babble)
                for t in takes for _ in range(copies)]
     return np.stack(windows) if windows else np.zeros((0, WINDOW), dtype=np.float32)
 
@@ -247,6 +281,8 @@ def main() -> None:
     )
     embed(features, phrase_windows(train_pos, 10, babble), "pos_train")
     embed(features, phrase_windows(test_pos, 4, babble), "pos_test")
+    embed(features, partial_clip_windows(train_pos, 4, babble), "neg_partial")
+    embed(features, partial_clip_windows(test_pos, 2, babble), "neg_partial_test")
     embed(features, phrase_windows([c for v in near.values() for c in v], 6, babble), "neg_near")
     if speech:
         per_voice = [np.concatenate(v) for v in speech.values()]
@@ -266,6 +302,7 @@ def main() -> None:
             if json.loads(meta_path.read_text())["kind"] in ("talk", "room"):
                 negatives.append(block_windows(load(meta_path.with_suffix(".wav")), babble))
         embed(features, np.concatenate(negatives), "neg_rec")
+        embed(features, partial_take_windows([t for t in pos if not t.held_out], 10, babble), "neg_rec_partial")
 
 
 if __name__ == "__main__":

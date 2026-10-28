@@ -85,13 +85,15 @@ def evaluate(model: nn.Module, data: dict, threshold: float) -> dict:
         "recall": float(np.mean(predict(model, data["pos_test"]) >= threshold)),
         "fp_per_h": events(val, threshold) / data["val_hours"],
         "near_miss": float(np.mean(predict(model, data["near_test"]) >= threshold)),
+        "cut_off": float(np.mean(predict(model, data["partial_test"]) >= threshold)),
         **({"you": float(np.mean(predict(model, data["rec_test"]) >= threshold))} if "rec_test" in data else {}),
     }
 
 
 def describe(m: dict) -> str:
     you = f"  your voice {m['you']:.3f}" if "you" in m else ""
-    return f"recall {m['recall']:.3f}{you}  false wakes/h {m['fp_per_h']:.2f}  near-miss {m['near_miss']:.3f}"
+    return (f"recall {m['recall']:.3f}{you}  false wakes/h {m['fp_per_h']:.2f}  near-miss {m['near_miss']:.3f}  "
+            f"cut-off {m['cut_off']:.3f}")
 
 
 MINE_EVERY = 2000
@@ -100,9 +102,12 @@ HARD_POOL = 20000
 
 def batches(data: dict, rng: np.random.Generator):
     positive = {"pos": 192} | ({"rec": 96} if "rec" in data else {})
-    negative = {"near": 64, "speech": 64, "snippets": 96, "noise": 32, "room": 128, "acav": 256, "hard": 256}
+    negative = {"near": 64, "partial": 96, "speech": 64, "snippets": 96, "noise": 32, "room": 128, "acav": 256,
+                "hard": 256}
     if "rec_neg" in data:
         negative["rec_neg"] = 96
+    if "rec_partial" in data:
+        negative["rec_partial"] = 64
     sizes = positive | negative
     while True:
         x = [data[k][rng.integers(0, len(data[k]), n)] for k, n in sizes.items()]
@@ -138,7 +143,7 @@ def train(data: dict, steps: int, dim: int, blocks: int, dropout: float, max_neg
             m = evaluate(model, data, threshold)
             print(f"step {step:6d}  loss {loss.item():.4f}  {describe(m)}", flush=True)
             # Only checkpoints past the halfway mark compete; early ones haven't seen the full negative weight.
-            score = m["recall"] + m.get("you", 0) - 0.15 * m["fp_per_h"] - 0.5 * m["near_miss"]
+            score = m["recall"] + m.get("you", 0) - 0.15 * m["fp_per_h"] - 0.5 * m["near_miss"] - m["cut_off"]
             if step >= steps // 2 and (best is None or score > best[0]):
                 best = (score, step, m)
                 best_state = {k: v.clone() for k, v in model.state_dict().items()}
@@ -189,9 +194,18 @@ def stream_check(path: Path, threshold: float) -> None:
 
     takes = features.recorded_takes()
     held_out = [t for t in takes if t.held_out]
+
+    def isolated(t, stop: int) -> np.ndarray:
+        # Room tone from the block's lead-in, then only this take: the neighbouring takes must not leak in.
+        quiet = t.audio[: 16000 * 2]
+        return np.concatenate([quiet, t.audio[t.start - 12800 : stop], quiet[:12800]]) * 32767
+
     for kind, label in (("pos", "your held-out takes"), ("near", "your held-out near-misses")):
-        report(label, [peak(t.audio[max(0, t.end - 3 * 16000) : t.end + 8000] * 32767)
-                       for t in held_out if t.kind == kind])
+        report(label, [peak(isolated(t, t.end)) for t in held_out if t.kind == kind])
+    for frac in (0.45, 0.6):
+        report(f"your held-out takes cut at {frac:.0%}", [
+            peak(isolated(t, t.start + int((t.end - t.start) * frac))) for t in held_out if t.kind == "pos"
+        ])
 
 
 def main() -> None:
@@ -218,11 +232,13 @@ def main() -> None:
     data = {
         "pos": load("pos_train"), "pos_test": load("pos_test"),
         "near": near[split[:cut]], "near_test": near[split[cut:]],
+        "partial": load("neg_partial"), "partial_test": load("neg_partial_test"),
         "speech": load("neg_speech"), "snippets": load("neg_snippets"), "noise": load("neg_noise"),
         "room": room, "acav": load_acav(),
         "val": val, "val_hours": len(val) * FRAME_S / 3600,
     }
-    for key, name in (("rec", "pos_rec_train"), ("rec_test", "pos_rec_test"), ("rec_neg", "neg_rec")):
+    for key, name in (("rec", "pos_rec_train"), ("rec_test", "pos_rec_test"), ("rec_neg", "neg_rec"),
+                      ("rec_partial", "neg_rec_partial")):
         if (FEATURES / f"{name}.npy").exists():
             data[key] = load(name)
     print({k: (v.shape if hasattr(v, "shape") else round(v, 2)) for k, v in data.items()}, flush=True)
