@@ -19,6 +19,10 @@ FIRST_TOKEN_TIMEOUT_S = 8.0
 # measured), and drops the compiled form after a while unused.
 WARM_EVERY_S = 6 * 3600
 WARM_CHECK_S = 60.0
+# The cached prefix (persona, memory, tools) lives an hour; an idle refresh just
+# before that costs one cache read instead of a full write on the next turn.
+CACHE = {"type": "ephemeral", "ttl": "1h"}
+REFRESH_EVERY_S = 50 * 60
 MEMORY_S = 180.0
 # Runs on Anthropic's side. No country: the API rejects "SK" as a location.
 WEB_SEARCH = {
@@ -117,30 +121,51 @@ class Brain:
         """A throwaway request whenever the tool schemas change, so their
         compilation never lands on a real turn."""
         warmed: list[dict[str, Any]] | None = None
-        at = 0.0
+        compiled = refreshed = 0.0
         while True:
             tools = self._tool_defs()
-            if (tools != warmed or time.monotonic() - at > WARM_EVERY_S):
-                self._persona.refresh()
-                started = time.monotonic()
-                try:
+            self._persona.refresh()
+            started = time.monotonic()
+            ping = [{"role": "user", "content": "ping"}]
+            try:
+                if tools != warmed or started - compiled > WARM_EVERY_S:
+                    # max_tokens=0 skips sampling, so it can't be trusted to compile the schemas.
                     async with self._client.beta.messages.stream(
-                        model=self._cfg.claude_model,
-                        max_tokens=16,
-                        system=[{"type": "text", "text": self._system_text(), "cache_control": {"type": "ephemeral"}}],
-                        messages=[{"role": "user", "content": "ping"}],
-                        thinking={"type": "adaptive"},
-                        output_config={"effort": self._cfg.claude_effort},
-                        betas=["server-side-fallback-2026-07-01"],
-                        fallbacks="default",
-                        tools=tools,
+                        max_tokens=16, messages=ping, **self._params(self._system_text(), tools)
                     ) as stream:
-                        await stream.get_final_message()
-                    warmed, at = tools, time.monotonic()
-                    log.info("tool schemas warmed in %.1f s", at - started)
-                except Exception as err:
-                    log.info("warming tool schemas failed: %s", err)
+                        message = await stream.get_final_message()
+                    warmed, compiled = tools, time.monotonic()
+                    refreshed = compiled
+                    log.info(
+                        "tool schemas warmed in %.1f s, cache written=%s",
+                        compiled - started,
+                        message.usage.cache_creation_input_tokens,
+                    )
+                elif started - max(refreshed, self._last_turn) > REFRESH_EVERY_S:
+                    message = await self._client.beta.messages.create(
+                        max_tokens=0, messages=ping, **self._params(self._system_text(), tools)
+                    )
+                    refreshed = time.monotonic()
+                    log.info(
+                        "prompt cache refreshed: read=%s written=%s",
+                        message.usage.cache_read_input_tokens,
+                        message.usage.cache_creation_input_tokens,
+                    )
+            except Exception as err:
+                log.info("warming failed: %s", err)
             await asyncio.sleep(WARM_CHECK_S)
+
+    def _params(self, system: str, tools: list[dict[str, Any]]) -> dict[str, Any]:
+        """Everything that makes up the cached prefix, identical for real turns and warm-ups."""
+        return {
+            "model": self._cfg.claude_model,
+            "system": [{"type": "text", "text": system, "cache_control": CACHE}],
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": self._cfg.claude_effort},
+            "betas": ["server-side-fallback-2026-07-01"],
+            "fallbacks": "default",
+            "tools": tools,
+        }
 
     def _tool_defs(self) -> list[dict[str, Any]]:
         return [*self._registry.tool_defs(), WEB_SEARCH]
@@ -225,15 +250,7 @@ class Brain:
         try:
             async with asyncio.timeout(FIRST_TOKEN_TIMEOUT_S) as deadline:
                 async with self._client.beta.messages.stream(
-                    model=self._cfg.claude_model,
-                    max_tokens=MAX_TOKENS,
-                    system=[{"type": "text", "text": self._system, "cache_control": {"type": "ephemeral"}}],
-                    messages=self._messages,
-                    thinking={"type": "adaptive"},
-                    output_config={"effort": self._cfg.claude_effort},
-                    betas=["server-side-fallback-2026-07-01"],
-                    fallbacks="default",
-                    tools=self._tools,
+                    max_tokens=MAX_TOKENS, messages=self._messages, **self._params(self._system, self._tools)
                 ) as stream:
                     async for event in stream:
                         if event.type == "text":
@@ -276,11 +293,12 @@ class Brain:
             }
         )
         log.info(
-            "claude: model=%s stop=%s in=%s cache_read=%s out=%s",
+            "claude: model=%s stop=%s in=%s cache_read=%s cache_write=%s out=%s",
             message.model,
             message.stop_reason,
             usage.input_tokens,
             usage.cache_read_input_tokens,
+            usage.cache_creation_input_tokens,
             usage.output_tokens,
         )
         return message
