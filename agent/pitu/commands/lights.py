@@ -243,7 +243,7 @@ def _run(name: str, on: bool, brightness: int, color: str, effect: str) -> None:
     "Ovláda svetlá: zapne, vypne, nastaví jas, farbu, náladu alebo efekt. Rozumej aj voľným formuláciám "
     "(„rozsviet pri posteli“, „stlm posteľ na desať percent“, „daj tam niečo modré“, „svetlo na čítanie“, "
     "„urob párty“). Keď povie len „obývačka“ alebo „svetlo v obývačke“, myslí obe svetlá v obývačke. "
-    "Keď nepovie ktoré svetlo a z rozhovoru to nevyplýva, použi „všetky“."
+    "Keď nepovie ktoré svetlo a z rozhovoru to nevyplýva, použi „obývačka“. „Všetky“ len keď povie všetky svetlá alebo celý byt."
 )
 def light(
     name: Annotated[str, Choices(names)],
