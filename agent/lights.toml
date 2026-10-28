@@ -8,6 +8,10 @@
 # Po novom spárovaní sa kľúč zmení. IP adresu je dobré zamknúť v routeri.
 #
 # Skupina: `members` sú názvy svetiel vyššie, prepnú sa naraz.
+#
+# Nálady („svetlo na čítanie“): jas 1-100 a farba, ako ju povieš Piťuovi
+# (teplá/neutrálna/studená biela, červená, oranžová, žltá, zelená, tyrkysová,
+# modrá, fialová, ružová). Efekty párty, prelievanie a sviečka sú vstavané.
 
 [lights."posteľ"]
 type = "yeelight"
@@ -29,3 +33,15 @@ version = 3.5
 [lights."obývačka"]
 type = "group"
 members = ["obývačka hore", "obývačka dole"]
+
+[lights."všetky"]
+type = "group"
+members = ["posteľ", "obývačka hore", "obývačka dole"]
+
+[moods."čítanie"]
+brightness = 100
+color = "neutrálna biela"
+
+[moods."večer"]
+brightness = 20
+color = "teplá biela"
