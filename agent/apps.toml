@@ -7,6 +7,7 @@
 "Steam" = "steam://open/main"
 "Discord" = "discord://"
 "Battle.net" = "battlenet://"
+"Slack" = 'shell:AppsFolder\com.tinyspeck.slackdesktop_8yrtsj140pw4g!Slack'
 "Firefox" = "firefox.exe"
 "Chrome" = "chrome.exe"
 "Prieskumník" = "explorer.exe"

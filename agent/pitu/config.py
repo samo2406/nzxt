@@ -12,6 +12,7 @@ PERSONA_PATH = AGENT_DIR / "persona.md"
 PERSONA_LOCAL_PATH = AGENT_DIR / "persona.local.md"
 APPS_PATH = AGENT_DIR / "apps.toml"
 LIGHTS_PATH = AGENT_DIR / "lights.toml"
+ROUTINES_PATH = AGENT_DIR / "routines.toml"
 
 PAGES_ORIGIN = ("https://samo2406.github.io",)
 # Any local Vite project uses these ports, so they are trusted only on request.

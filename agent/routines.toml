@@ -1,0 +1,11 @@
+# Rutiny: viac krokov na jednu vetu („nachystaj ma do roboty“).
+# Vľavo názov rutiny. Zmena platí od ďalšieho rozhovoru.
+#
+# desktop = číslo virtuálnej plochy, na ktorú sa prepne (chýbajúcu vytvorí)
+# apps = názvy z apps.toml, otvoria sa na tej ploche
+# mouse_jiggler = true zapne Mouse Jiggler
+
+[routines."do roboty"]
+desktop = 2
+apps = ["Slack"]
+mouse_jiggler = true
