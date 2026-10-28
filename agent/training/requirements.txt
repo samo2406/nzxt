@@ -7,3 +7,4 @@ numpy==2.5.4
 scipy==1.18.1
 azure-cognitiveservices-speech==1.53.0
 python-dotenv
+sounddevice==0.5.6

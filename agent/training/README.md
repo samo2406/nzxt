@@ -19,6 +19,20 @@ Produces `../models/hej_pitu.onnx`, an openWakeWord classifier on top of its sha
 3. **`python features.py`** — augmentation (speed, reverb, mic colouring, noise, speech before the phrase) and embeddings. Ten voices are held out for testing.
 4. **`python train.py`** — trains, prints recall / false wakes per hour / near-miss rate at several thresholds, exports the model, and replays the held-out clips through openWakeWord's streaming `Model` the way the agent does.
 
+## Your voice
+
+```powershell
+.\.venv\Scripts\python.exe record.py
+```
+
+The script runs about 10 minutes of guided blocks with the agent's own mic:
+- **80 takes of "Hej Piťu":** normal, quiet, loud, fast, across the room, turned away, over music, over a game.
+- **Things that must not wake it:** near-misses, a minute of you talking, and a minute of room, music or game audio.
+
+It pauses the Piťu task while recording and starts it again at the end. Delete `work/recordings/<block>.*` to redo one block.
+
+Then run `python features.py` and `python train.py` as above. Every fourth take stays out of training, and `train.py` reports how often those woke it. `python train.py --evaluate ..\models\hej_pitu.onnx` gives the same check for an existing model without training.
+
 ## Current model
 
 Synthetic voices only:

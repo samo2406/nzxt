@@ -1,11 +1,13 @@
-"""Augments the generated clips into 2 s windows and turns them into
-openWakeWord embeddings (N, 16, 96). Positives from a held-out set of voices
-go to separate test files, so recall is measured on voices the model never saw."""
+"""Augments the generated clips and your recordings into 2 s windows and turns
+them into openWakeWord embeddings (N, 16, 96). Positives from held-out voices,
+and every fourth of your own takes, go to separate test files, so recall is
+measured on audio the model never saw."""
 from __future__ import annotations
 
 import json
 import random
 import wave
+from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 
@@ -17,10 +19,12 @@ HERE = Path(__file__).resolve().parent
 WORK = HERE / "work"
 CLIPS = WORK / "clips"
 OUT = WORK / "features"
+RECORDINGS = WORK / "recordings"
 MODELS = HERE.parent / ".venv" / "Lib" / "site-packages" / "openwakeword" / "resources" / "models"
 RATE = 16000
 WINDOW = 2 * RATE
 TEST_VOICES = 10
+TEST_EVERY = 4
 
 rng = np.random.default_rng(11)
 
@@ -149,7 +153,73 @@ def noise_windows(count: int) -> np.ndarray:
     ])
 
 
+@dataclass
+class Take:
+    block: str
+    kind: str
+    index: int
+    end: int
+    """Sample where the voice in this take stops."""
+    audio: np.ndarray
+    """The whole recorded block the take is in."""
+
+    @property
+    def held_out(self) -> bool:
+        return self.index % TEST_EVERY == TEST_EVERY - 1
+
+
+def recorded_takes() -> list[Take]:
+    from openwakeword.vad import VAD
+
+    vad = VAD(model_path=str(MODELS / "silero_vad.onnx"))
+    frame = 480
+    takes = []
+    for meta_path in sorted(RECORDINGS.glob("*.json")):
+        meta = json.loads(meta_path.read_text())
+        audio = load(meta_path.with_suffix(".wav"))
+        pcm = (audio * 32767).astype(np.int16)
+        slot = int(meta["slot_s"] * RATE)
+        for i, start in enumerate(meta["slots"]):
+            vad.reset_states()
+            voiced = [k for k in range(slot // frame)
+                      if vad.predict(pcm[start + k * frame : start + (k + 1) * frame], frame_size=frame) >= 0.5]
+            if not voiced:
+                print(f"  {meta_path.stem} take {i + 1}: no voice found, skipped", flush=True)
+                continue
+            takes.append(Take(meta_path.stem, meta["kind"], i, start + (voiced[-1] + 1) * frame, audio))
+    return takes
+
+
+def real_window(audio: np.ndarray, end: int) -> np.ndarray:
+    w = audio[max(0, end - WINDOW) : end]
+    return np.pad(w, (WINDOW - len(w), 0), mode="reflect" if 0 < len(w) < WINDOW else "constant")
+
+
+def light(window: np.ndarray, babble: np.ndarray | None) -> np.ndarray:
+    """Your recordings already carry the real room, so they only get level changes and a little extra noise."""
+    out = window * 10 ** (rng.uniform(-8, 6) / 20)
+    if rng.random() < 0.4:
+        out = out + set_level(noise(WINDOW), rms_db(out) - rng.uniform(10, 30))
+    if babble is not None and rng.random() < 0.2:
+        out = out + set_level(crop(babble), rms_db(out) - rng.uniform(10, 20))
+    return np.clip(out, -0.99, 0.99)
+
+
+def take_windows(takes: list[Take], copies: int, babble: np.ndarray | None) -> np.ndarray:
+    windows = [light(real_window(t.audio, t.end + int(rng.uniform(0, 0.2) * RATE)), babble)
+               for t in takes for _ in range(copies)]
+    return np.stack(windows) if windows else np.zeros((0, WINDOW), dtype=np.float32)
+
+
+def block_windows(audio: np.ndarray, babble: np.ndarray | None) -> np.ndarray:
+    ends = range(WINDOW, len(audio), RATE // 4)
+    return np.stack([light(real_window(audio, e), babble) for e in ends for _ in range(2)])
+
+
 def embed(features: AudioFeatures, windows: np.ndarray, name: str) -> None:
+    if not len(windows):
+        (OUT / f"{name}.npy").unlink(missing_ok=True)
+        return
     x = (np.clip(windows, -1, 1) * 32767).astype(np.int16)
     emb = features.embed_clips(x, batch_size=256, ncpu=8)[:, -16:, :].astype(np.float32)
     np.save(OUT / f"{name}.npy", emb)
@@ -183,6 +253,19 @@ def main() -> None:
         embed(features, np.concatenate([stream_windows(s, 800, None) for s in per_voice]), "neg_speech")
         embed(features, np.concatenate([snippet_windows(s, 1200, babble) for s in per_voice]), "neg_snippets")
     embed(features, noise_windows(3000), "neg_noise")
+
+    takes = recorded_takes()
+    if takes:
+        pos = [t for t in takes if t.kind == "pos"]
+        print(f"your takes: {len(pos)} of \"Hej Piťu\", {sum(t.held_out for t in pos)} held out", flush=True)
+        embed(features, take_windows([t for t in pos if not t.held_out], 12, babble), "pos_rec_train")
+        test = [real_window(t.audio, t.end + RATE // 10) for t in pos if t.held_out]
+        embed(features, np.stack(test) if test else np.zeros((0, WINDOW)), "pos_rec_test")
+        negatives = [take_windows([t for t in takes if t.kind == "near"], 6, babble)]
+        for meta_path in sorted(RECORDINGS.glob("*.json")):
+            if json.loads(meta_path.read_text())["kind"] in ("talk", "room"):
+                negatives.append(block_windows(load(meta_path.with_suffix(".wav")), babble))
+        embed(features, np.concatenate(negatives), "neg_rec")
 
 
 if __name__ == "__main__":
