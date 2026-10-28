@@ -2,3 +2,11 @@ node_modules/
 dist/
 *.local
 .DS_Store
+
+agent/.env
+agent/.venv/
+agent/data/
+agent/persona.local.md
+agent/training/.venv/
+agent/training/work/
+__pycache__/
