@@ -1,9 +1,11 @@
-import type { NowPlaying } from './player';
+import { recall, remember } from './lyrics-store';
+import type { NowPlaying, TrackInfo } from './player';
 
 /**
  * Time-synced lyrics from LRCLIB (https://lrclib.net), a free, keyless,
- * CORS-enabled database. Fetched at runtime for the track that's playing and
- * kept in memory only; nothing is stored or shipped with the page.
+ * CORS-enabled database. Fetched at runtime for the track that's playing (and
+ * the next one in the queue), remembered in this browser by lyrics-store;
+ * nothing is shipped with the page.
  */
 
 export interface LyricLine {
@@ -23,6 +25,7 @@ const DURATION_SLACK_S = 3;
 const CACHE_SIZE = 40;
 
 const cache = new Map<string, Lyrics | null>();
+const pending = new Map<string, Promise<Lyrics | null>>();
 
 interface LrclibRecord {
   duration?: number;
@@ -86,13 +89,26 @@ function synced(record: LrclibRecord | null): Lyrics | null {
 
 /**
  * Null when the track has no synced lyrics (cached), throws on a network
- * failure (not cached, so the next play retries).
+ * failure (not cached, so the next play retries). A lookup already under way
+ * for the same track (the prefetch, when that track starts) is shared.
  */
-export async function fetchLyrics(now: NowPlaying, signal: AbortSignal): Promise<Lyrics | null> {
-  if (now.isEpisode || !now.title || !now.artist) return null;
-  const hit = cache.get(now.id);
-  if (hit !== undefined) return hit;
+export function fetchLyrics(now: TrackInfo, signal: AbortSignal): Promise<Lyrics | null> {
+  if (now.isEpisode || !now.title || !now.artist) return Promise.resolve(null);
+  let hit = cache.get(now.id);
+  if (hit === undefined) {
+    hit = recall(now.id);
+    if (hit !== undefined) hold(now.id, hit);
+  }
+  if (hit !== undefined) return Promise.resolve(hit);
+  let lookup = pending.get(now.id);
+  if (!lookup) {
+    lookup = lookUp(now, signal).finally(() => pending.delete(now.id));
+    pending.set(now.id, lookup);
+  }
+  return lookup;
+}
 
+async function lookUp(now: TrackInfo, signal: AbortSignal): Promise<Lyrics | null> {
   const artist = now.artist.split(', ')[0];
   const duration = Math.round(now.durationMs / 1000);
   const q = (params: Record<string, string>): string => new URLSearchParams(params).toString();
@@ -108,9 +124,14 @@ export async function fetchLyrics(now: NowPlaying, signal: AbortSignal): Promise
     lyrics = synced(best ?? null);
   }
 
-  cache.set(now.id, lyrics);
-  if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value as string);
+  hold(now.id, lyrics);
+  remember(now.id, lyrics);
   return lyrics;
+}
+
+function hold(id: string, lyrics: Lyrics | null): void {
+  cache.set(id, lyrics);
+  if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value as string);
 }
 
 /** Placeholder lines for the ?mock=1 tracks: a verse, a repeated refrain and breaks. */

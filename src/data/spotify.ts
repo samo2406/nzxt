@@ -1,10 +1,11 @@
 import { publish, subscribe } from '../core/bus';
 import { isKrakenWindow } from '../core/env';
-import type { NowPlaying, PlayerSource, PollResult } from './player';
+import type { NowPlaying, PlayerSource, PollResult, TrackInfo } from './player';
 
 const AUTH_URL = 'https://accounts.spotify.com/authorize';
 const TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const API_URL = 'https://api.spotify.com/v1/me/player/currently-playing?additional_types=track,episode';
+const QUEUE_URL = 'https://api.spotify.com/v1/me/player/queue';
 const SCOPES = 'user-read-currently-playing user-read-playback-state';
 
 const TOKEN_KEY = 'kraken-lcd:spotify-token';
@@ -249,14 +250,25 @@ function pickArt(images: SpotifyImage[] | undefined): string | null {
   return images.reduce((best, img) => ((img.width ?? 0) > (best.width ?? 0) ? img : best)).url ?? null;
 }
 
-function parse(json: Record<string, any>, previous: NowPlaying | null): NowPlaying | null {
-  const item = json?.item;
-  if (!item) return null;
-
+function trackInfo(item: any): TrackInfo {
   const isEpisode = item.type === 'episode';
   const artists: string[] = Array.isArray(item.artists)
     ? item.artists.map((a: { name?: string }) => a?.name).filter(Boolean)
     : [];
+  return {
+    id: item.id ?? item.uri ?? 'unknown',
+    title: item.name ?? '',
+    artist: isEpisode ? (item.show?.name ?? '') : artists.join(', '),
+    durationMs: item.duration_ms ?? 0,
+    isEpisode,
+  };
+}
+
+function parse(json: Record<string, any>, previous: NowPlaying | null): NowPlaying | null {
+  const item = json?.item;
+  if (!item) return null;
+
+  const info = trackInfo(item);
 
   const progressMs = typeof json.progress_ms === 'number' ? json.progress_ms : 0;
   const sampledAt = performance.now();
@@ -268,14 +280,10 @@ function parse(json: Record<string, any>, previous: NowPlaying | null): NowPlayi
   }
 
   return {
-    id: item.id ?? item.uri ?? 'unknown',
-    title: item.name ?? '',
-    artist: isEpisode ? (item.show?.name ?? '') : artists.join(', '),
-    artUrl: pickArt(isEpisode ? item.images : item.album?.images),
-    durationMs: item.duration_ms ?? 0,
+    ...info,
+    artUrl: pickArt(info.isEpisode ? item.images : item.album?.images),
     progressMs,
     isPlaying: json.is_playing === true,
-    isEpisode,
     sampledAt,
     seeked,
   };
@@ -395,5 +403,15 @@ export class SpotifyPlayer implements PlayerSource {
     }
     this.previous = now;
     return { kind: 'track', now };
+  }
+
+  async upNext(): Promise<TrackInfo | null> {
+    const token = await validToken(this.clientId);
+    if (!token || Date.now() < this.retryAfterUntil) return null;
+    const res = await fetch(QUEUE_URL, { headers: { Authorization: `Bearer ${token.access_token}` } });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => null);
+    const item = json?.queue?.[0];
+    return item ? trackInfo(item) : null;
   }
 }

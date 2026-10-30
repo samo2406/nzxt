@@ -23,6 +23,9 @@ export interface NowPlaying {
   seeked: boolean;
 }
 
+/** What it takes to look a track up elsewhere (lyrics). */
+export type TrackInfo = Pick<NowPlaying, 'id' | 'title' | 'artist' | 'durationMs' | 'isEpisode'>;
+
 export type PollResult =
   | { kind: 'track'; now: NowPlaying }
   /** Authoritative: nothing is loaded in the player. */
@@ -36,4 +39,6 @@ export interface PlayerSource {
   start(): void;
   stop(): void;
   onResult(fn: (result: PollResult) => void): () => void;
+  /** The track after this one in the queue, when the source knows it. */
+  upNext?(): Promise<TrackInfo | null>;
 }

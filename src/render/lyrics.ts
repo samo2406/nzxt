@@ -1,6 +1,6 @@
 import { prefersReducedMotion } from '../core/env';
 import { fetchLyrics, mockLyrics, type Lyrics } from '../data/lyrics';
-import type { NowPlaying, PollResult } from '../data/player';
+import type { NowPlaying, PlayerSource, PollResult } from '../data/player';
 import '../styles/lyrics.css';
 
 /** A failed lookup (LRCLIB busy, offline) is tried again this much later, twice. */
@@ -170,6 +170,10 @@ export class LyricsFeed {
   private last: NowPlaying | null = null;
   private abort: AbortController | null = null;
   private retryTimer = 0;
+  private source: PlayerSource | null = null;
+  /** Prefetches outlive track changes: the one for the next track is what that track then waits on. */
+  private readonly prefetchAbort = new AbortController();
+  private prefetchedFor: string | null = null;
 
   constructor(
     private readonly view: LyricsView,
@@ -177,6 +181,11 @@ export class LyricsFeed {
     private enabled: boolean,
   ) {
     view.setEnabled(enabled);
+  }
+
+  /** Where to ask for the next track, so its lyrics are ready before it starts. */
+  setSource(source: PlayerSource): void {
+    this.source = source;
   }
 
   result(result: PollResult): void {
@@ -215,10 +224,12 @@ export class LyricsFeed {
     fetchLyrics(now, abort.signal)
       .then((lyrics) => {
         if (this.trackId === now.id) this.view.set(lyrics);
+        this.prefetch(now.id);
       })
       .catch((err) => {
         if (abort.signal.aborted) return;
         console.warn('[lyrics] could not load', err);
+        this.prefetch(now.id);
         if (retries > 0) {
           this.retryTimer = window.setTimeout(() => {
             if (this.trackId === now.id && this.last) this.load(this.last, retries - 1);
@@ -227,9 +238,22 @@ export class LyricsFeed {
       });
   }
 
+  private prefetch(current: string): void {
+    if (this.prefetchedFor === current || !this.source?.upNext) return;
+    this.prefetchedFor = current;
+    const signal = this.prefetchAbort.signal;
+    this.source
+      .upNext()
+      .then((next) => (next && next.id !== current ? fetchLyrics(next, signal) : null))
+      .catch((err) => {
+        if (!signal.aborted) console.warn('[lyrics] could not prefetch', err);
+      });
+  }
+
   destroy(): void {
     clearTimeout(this.retryTimer);
     this.abort?.abort();
+    this.prefetchAbort.abort();
     this.view.destroy();
   }
 }

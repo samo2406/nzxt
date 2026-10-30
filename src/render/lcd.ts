@@ -268,6 +268,7 @@ class AssistantController {
 
 function wirePlayer(player: PlayerSource, state: ScreenState, vinyl: VinylView, buddy: Buddy, lyrics: LyricsFeed): void {
   let trackId: string | null = null;
+  lyrics.setSource(player);
   player.onResult((result) => {
     vinyl.update(result);
     lyrics.result(result);
