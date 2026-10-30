@@ -31,13 +31,13 @@ const HAND_KEYS: (keyof Pose)[] = ['handLx', 'handLy', 'handRx', 'handRy', 'rotL
 const GESTURES: Look[] = [
   { pose: {} },
   { pose: { handLx: 20, handLy: 6, rotL: -50, handRx: -20, handRy: 6, rotR: 50 } },
-  { pose: { handLx: 12, handLy: -22, rotL: -165, bendL: -1 }, hands: { gloveL: 'point' } },
+  { pose: { handLx: 12, handLy: -22, rotL: -165 }, hands: { gloveL: 'point' } },
   { pose: { handRx: -22, handRy: 2, rotR: 75 } },
   { pose: { handLx: 18, handLy: -4, rotL: -95, handRx: -10, handRy: 24 } },
 ];
 
 const STAGE: Partial<Record<FaceState, Look>> = {
-  listening: { pose: { handLx: -4, handLy: -22, rotL: 180, bendL: -1, browY: 0.5, lidL: 0, lidR: 0, squash: 1.03, turn: -0.1, smile: 0.5 } },
+  listening: { pose: { handLx: -4, handLy: -22, rotL: 180, browY: 0.5, lidL: 0, lidR: 0, squash: 1.03, turn: -0.1, smile: 0.5 } },
   thinking: EMOTION_LOOKS.thinking,
   alarm: { pose: { ...EMOTION_LOOKS.excited.pose, sparkle: 0, bang: 1, mouthO: 1 }, hands: EMOTION_LOOKS.excited.hands },
   error: EMOTION_LOOKS.sad,
@@ -238,7 +238,7 @@ export class Buddy {
     Object.assign(pose, feeling.pose);
     if (HAND_KEYS.some((k) => k in feeling.pose)) hands = { ...OPEN, ...feeling.hands };
     if (this.sign) {
-      Object.assign(pose, { handLx: 30, handLy: -18, rotL: 180, bendL: -1, sign: 1 });
+      Object.assign(pose, { handLx: 30, handLy: -18, rotL: 180, sign: 1 });
       hands = { ...hands, gloveL: 'fist' };
     }
     return { pose, hands };

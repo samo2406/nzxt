@@ -106,8 +106,8 @@ export function drawBuddy(ctx: CanvasRenderingContext2D, p: Pose, hands: Hands, 
     const hx = side === 1 ? p.handLx : p.handRx;
     const hy = side === 1 ? p.handLy : p.handRy;
     const hand: Pt = [shoulder[0] + hx, shoulder[1] + hy];
-    const bend = -(side === 1 ? p.bendL : p.bendR) * side * 6;
-    limb(ctx, shoulder, hand, bend, 4);
+    const bend = (side === 1 ? p.bendL : p.bendR) * 6;
+    limb(ctx, shoulder, hand, bend, 4, side);
     glove(ctx, hand, side === 1 ? p.rotL : p.rotR, side === 1 ? hands.gloveL : hands.gloveR, side, ink);
   }
 
@@ -305,36 +305,56 @@ function mouth(ctx: CanvasRenderingContext2D, p: Pose, mx: number, ink: number):
     return;
   }
   const open = p.mouthOpen * 18;
-  ctx.beginPath();
-  if (p.mouthO > 0.5) {
-    ctx.ellipse(...j(mx, y + open * 0.35), w * 0.6, Math.max(3, open * 0.55), 0, 0, Math.PI * 2);
-  } else {
-    ctx.moveTo(...j(mx - w, y + lift));
-    ctx.quadraticCurveTo(...j(mx, y + p.smile * 4), ...j(mx + w, y + lift));
-    ctx.quadraticCurveTo(...j(mx, y + lift + open + Math.max(0, p.smile) * 6), ...j(mx - w, y + lift));
-  }
-  ctx.closePath();
+  const round = p.mouthO > 0.5;
+  const oy = y + open * 0.35;
+  const oh = Math.max(3, open * 0.55);
+  const save = counter;
+  const outline = (): void => {
+    counter = save;
+    ctx.beginPath();
+    if (round) {
+      ctx.ellipse(...j(mx, oy), w * 0.6, oh, 0, 0, Math.PI * 2);
+    } else {
+      ctx.moveTo(...j(mx - w, y + lift));
+      ctx.quadraticCurveTo(...j(mx, y + p.smile * 4), ...j(mx + w, y + lift));
+      ctx.quadraticCurveTo(...j(mx, y + lift + open + Math.max(0, p.smile) * 6), ...j(mx - w, y + lift));
+    }
+    ctx.closePath();
+  };
+  outline();
   ctx.fillStyle = MOUTH;
   ctx.fill();
   ctx.save();
   ctx.clip();
   ctx.fillStyle = TONGUE;
   ctx.beginPath();
-  ctx.ellipse(mx, y + lift + open + 2, w * 0.6, open * 0.45, 0, 0, Math.PI * 2);
+  if (round) ctx.ellipse(mx, oy + oh * 0.75, w * 0.4, oh * 0.5, 0, 0, Math.PI * 2);
+  else ctx.ellipse(mx, y + lift + open + 2, w * 0.6, open * 0.45, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
+  outline();
   ctx.stroke();
 }
 
 // ------------------------------------------------------------------ limbs
 
-/** A rubber-hose limb: one bowed curve, no joints. */
-function limb(ctx: CanvasRenderingContext2D, a: Pt, b: Pt, bow: number, width: number): void {
+/**
+ * A rubber-hose limb: one bowed curve, no joints. With `outward` (the arm's
+ * side), a positive bow always swings the elbow away from the body, whichever
+ * way the arm points.
+ */
+function limb(ctx: CanvasRenderingContext2D, a: Pt, b: Pt, bow: number, width: number, outward?: number): void {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const len = Math.hypot(dx, dy) || 1;
-  const nx = (-dy / len) * bow;
-  const ny = (dx / len) * bow;
+  let ux = -dy / len;
+  let uy = dx / len;
+  if (outward !== undefined && ux * outward + uy * 0.35 < 0) {
+    ux = -ux;
+    uy = -uy;
+  }
+  const nx = ux * bow;
+  const ny = uy * bow;
   ctx.strokeStyle = INK;
   ctx.lineWidth = width;
   ctx.beginPath();

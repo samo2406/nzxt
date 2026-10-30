@@ -47,7 +47,7 @@ export interface Pose {
   handLy: number;
   handRx: number;
   handRy: number;
-  /** Elbow side, -1 … 1. */
+  /** 1 bows the elbow away from the body, -1 toward it. */
   bendL: number;
   bendR: number;
   rotL: number;
@@ -139,17 +139,17 @@ export const EMOTION_LOOKS: Record<Emotion, Look> = {
     hands: { gloveL: 'open', gloveR: 'open' },
   },
   confused: {
-    pose: { browTilt: 0.5, browY: 0.2, smile: -0.25, mouthW: 0.7, lookX: 0.5, lookY: -0.5, turn: 0.2, lean: -5, handRx: 6, handRy: -38, bendR: -1, rotR: -150, question: 1 },
+    pose: { browTilt: 0.5, browY: 0.2, smile: -0.25, mouthW: 0.7, lookX: 0.5, lookY: -0.5, turn: 0.2, lean: -5, handRx: 6, handRy: -38, rotR: -150, question: 1 },
     hands: { gloveR: 'point' },
   },
   surprised: { pose: { pupil: 0.65, lidL: 0, lidR: 0, browY: 1, mouthOpen: 0.6, mouthO: 1, mouthW: 0.7, squash: 1.08, bang: 1, handLx: 22, handLy: -10, handRx: -22, handRy: -10, rotL: -40, rotR: 40 }, hands: { gloveL: 'open', gloveR: 'open' } },
   sad: { pose: { browTilt: 1, browY: -0.1, lidTilt: 1, lidL: 0.35, lidR: 0.35, smile: -0.8, lookY: 0.5, squash: 0.95, tip: -0.2, lean: 3, handLx: 2, handLy: 30, handRx: -2, handRy: 30 } },
   annoyed: {
-    pose: { browTilt: -1, browY: -0.3, lidTilt: -1, lidL: 0.45, lidR: 0.45, smile: -0.4, mouthW: 0.8, lookX: -0.4, handLx: -26, handLy: 4, handRx: 26, handRy: 6, bendL: -1, bendR: -1, rotL: 90, rotR: -90 },
+    pose: { browTilt: -1, browY: -0.3, lidTilt: -1, lidL: 0.45, lidR: 0.45, smile: -0.4, mouthW: 0.8, lookX: -0.4, handLx: -26, handLy: 4, handRx: 26, handRy: 6, rotL: 90, rotR: -90 },
     hands: { gloveL: 'fist', gloveR: 'fist' },
   },
   thinking: {
-    pose: { lookX: -0.6, lookY: -0.7, browTilt: 0.3, browY: 0.3, smile: 0, mouthW: 0.6, turn: -0.15, handRx: 22, handRy: 22, bendR: -1, rotR: -175, think: 1 },
+    pose: { lookX: -0.6, lookY: -0.7, browTilt: 0.3, browY: 0.3, smile: 0, mouthW: 0.6, turn: -0.15, handRx: 22, handRy: 22, rotR: -175, think: 1 },
     hands: { gloveR: 'fist' },
   },
   excited: {

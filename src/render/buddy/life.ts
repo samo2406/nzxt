@@ -376,12 +376,12 @@ export class Life {
       }
       case 'wrist':
         return out(
-          { handLx: -22, handLy: -4, rotL: 105, bendL: -1, lookX: 0.35, lookY: 0.55, turn: 0.1, browY: 0.3, smile: 0.2 },
+          { handLx: -22, handLy: -4, rotL: 105, lookX: 0.35, lookY: 0.55, turn: 0.1, browY: 0.3, smile: 0.2 },
           { hands: { gloveL: 'fist', gloveR: 'open' } },
         );
       case 'fan':
         return out(
-          { handRx: 4, handRy: -30, rotR: 160, bendR: -1, sweat: 1, browTilt: 0.7, smile: -0.4, mouthOpen: 0.2, lidL: 0.3, lidR: 0.3 },
+          { handRx: 4, handRy: -30, rotR: 160, sweat: 1, browTilt: 0.7, smile: -0.4, mouthOpen: 0.2, lidL: 0.3, lidR: 0.3 },
           { motion: 'fan' },
         );
       case 'ride':
