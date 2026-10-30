@@ -1,6 +1,8 @@
 .face {
   --face-ink: #eef3f8;
   --face-accent: #5ce1e6;
+  /* The background right behind the eyes, so a lid reads as the eye closing. */
+  --face-lid: #0a0f12;
   --face-spring: cubic-bezier(0.3, 1.45, 0.5, 1);
 
   position: absolute;
@@ -123,11 +125,93 @@
   left: 65%;
 }
 
+.face__bob,
+.face__tilt {
+  position: absolute;
+  inset: 0;
+}
+
+.face__tilt {
+  rotate: var(--tilt, 0deg);
+  translate: 0 var(--drop, 0%);
+  transition:
+    rotate 450ms var(--face-spring),
+    translate 450ms var(--face-spring);
+}
+
+.face__eye-look {
+  width: 100%;
+  height: 100%;
+  translate: var(--lx, 0%) var(--ly, 0%);
+  transition:
+    translate 140ms ease-out,
+    transform 320ms var(--face-spring);
+}
+
+.face__eye-ball {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: calc(38px * var(--u));
+  overflow: hidden;
+  transition:
+    transform 260ms var(--face-spring),
+    opacity 160ms ease;
+}
+
+/* Smiling eyes: the upper half of a ring, swapped in for the eye. */
+.face__eye-arc {
+  position: absolute;
+  left: -14%;
+  top: 30%;
+  width: 128%;
+  height: 62%;
+  border: calc(17px * var(--u)) solid transparent;
+  border-top-color: var(--face-ink);
+  border-radius: 50%;
+  opacity: 0;
+  transform: scaleY(0.6);
+  transition:
+    opacity 160ms ease,
+    transform 300ms var(--face-spring);
+}
+
+.face:is([data-emotion='happy'], [data-emotion='laugh']) .face__eye-ball {
+  opacity: 0;
+  transform: scaleY(0.3);
+}
+
+.face:is([data-emotion='happy'], [data-emotion='laugh']) .face__eye-arc {
+  opacity: 1;
+  transform: none;
+}
+
 .face__eye-inner {
   width: 100%;
   height: 100%;
   border-radius: calc(38px * var(--u));
   background: var(--face-ink);
+}
+
+/* Lids are the background colour sliding over the eye, clipped to its shape. */
+.face__lid {
+  position: absolute;
+  left: -10%;
+  width: 120%;
+  height: 100%;
+  background: var(--face-lid);
+  transition: transform 320ms var(--face-spring);
+}
+
+.face__lid--top {
+  top: 0;
+  transform: translateY(-101%);
+}
+
+.face__lid--bottom {
+  bottom: 0;
+  border-radius: 50% 50% 0 0 / 44% 44% 0 0;
+  transform: translateY(101%);
 }
 
 .face__mouth {
@@ -148,6 +232,47 @@
   border-radius: calc(33px * var(--u));
   background: var(--face-ink);
   transform: scaleY(0.14);
+  transition:
+    border-radius 300ms ease,
+    opacity 200ms ease;
+}
+
+/* Resting smile: the lower half of a ring, shown instead of the flat pill. */
+.face__mouth-curve {
+  position: absolute;
+  left: 8%;
+  top: -40%;
+  width: 84%;
+  height: 120%;
+  border: calc(11px * var(--u)) solid transparent;
+  border-bottom-color: var(--face-ink);
+  border-radius: 50%;
+  opacity: 0;
+  transition:
+    opacity 200ms ease,
+    transform 320ms var(--face-spring);
+}
+
+.face__accent {
+  position: absolute;
+  left: 76%;
+  top: 22%;
+  font-family: var(--font-ui);
+  font-size: calc(96px * var(--u));
+  font-weight: 800;
+  line-height: 1;
+  color: var(--face-accent);
+  text-shadow: 0 0 calc(18px * var(--u)) color-mix(in srgb, var(--face-accent) 60%, transparent);
+  opacity: 0;
+  transform: translateY(20%) scale(0.6);
+  transition:
+    opacity 250ms ease,
+    transform 400ms var(--face-spring);
+}
+
+.face__accent[data-on='true'] {
+  opacity: 1;
+  transform: none;
 }
 
 /* ------------------------------------------------------------------ states */
@@ -349,15 +474,268 @@
   opacity: 1;
 }
 
+/* ------------------------------------------------------------- expressions */
+
+/* Expressions use the individual translate/scale/rotate properties, so they
+   stack on top of the states' `transform` instead of fighting it. */
+.face__mouth {
+  transition:
+    transform 380ms var(--face-spring),
+    opacity 300ms ease,
+    translate 320ms var(--face-spring),
+    scale 320ms var(--face-spring),
+    rotate 320ms var(--face-spring);
+}
+
+.face:is([data-emotion='happy'], [data-emotion='laugh'], [data-emotion='excited'], [data-emotion='wink']) .face__mouth-inner {
+  border-radius: 14% 14% 50% 50% / 24% 24% 76% 76%;
+}
+
+.face:is([data-emotion='happy'], [data-emotion='laugh'], [data-emotion='excited'], [data-emotion='wink'], [data-emotion='sad']):not([data-state='speaking'], [data-state='sleeping'])
+  .face__mouth-inner {
+  opacity: 0;
+}
+
+.face:is([data-emotion='happy'], [data-emotion='laugh'], [data-emotion='excited'], [data-emotion='wink']):not([data-state='speaking'], [data-state='sleeping'])
+  .face__mouth-curve {
+  opacity: 1;
+}
+
+.face[data-emotion='laugh'] .face__mouth {
+  scale: 1.08 1;
+}
+
+.face[data-emotion='excited'] .face__eye-look {
+  transform: scale(1.12);
+}
+
+.face[data-emotion='excited'] .face__lid--bottom {
+  transform: translateY(74%);
+}
+
+.face[data-emotion='excited'] .face__mouth {
+  scale: 1.12 1;
+}
+
+.face[data-emotion='wink'] .face__eye--l .face__eye-look {
+  transform: translateY(8%) scaleY(0.1);
+}
+
+.face[data-emotion='wink'] {
+  --tilt: 4deg;
+}
+
+.face[data-emotion='confused'] {
+  --tilt: -7deg;
+}
+
+.face[data-emotion='confused'] .face__eye--l .face__eye-look {
+  transform: translateY(4%) scale(0.8);
+}
+
+.face[data-emotion='confused'] .face__eye--r .face__eye-look {
+  transform: translateY(-5%) scale(1.06);
+}
+
+.face[data-emotion='confused'] .face__eye--l .face__lid--top {
+  transform: translateY(-76%) rotate(-8deg);
+}
+
+.face[data-emotion='confused'] .face__mouth {
+  translate: 14% 0;
+  rotate: -9deg;
+  scale: 0.55 1;
+}
+
+.face[data-emotion='surprised'] {
+  --drop: -3%;
+}
+
+.face[data-emotion='surprised'] .face__eye-look {
+  transform: scale(1.24, 1.14);
+}
+
+.face[data-emotion='surprised'] .face__mouth {
+  scale: 0.42 1;
+}
+
+.face[data-emotion='surprised'] .face__mouth-inner {
+  border-radius: 50%;
+}
+
+.face[data-emotion='surprised']:not([data-state='speaking']) .face__mouth-inner {
+  transform: scaleY(0.75);
+}
+
+.face[data-emotion='sad'] {
+  --drop: 2.5%;
+}
+
+.face[data-emotion='sad'] .face__eye-look {
+  transform: translateY(5%) scaleY(0.92);
+}
+
+.face[data-emotion='sad'] .face__eye--l .face__lid--top {
+  transform: translateY(-62%) rotate(-17deg);
+}
+
+.face[data-emotion='sad'] .face__eye--r .face__lid--top {
+  transform: translateY(-62%) rotate(17deg);
+}
+
+.face[data-emotion='sad'] .face__mouth-inner {
+  border-radius: 50% 50% 14% 14% / 76% 76% 24% 24%;
+}
+
+.face[data-emotion='sad']:not([data-state='speaking'], [data-state='sleeping']) .face__mouth-curve {
+  opacity: 1;
+  transform: rotate(180deg) translateY(-45%) scaleX(0.8);
+}
+
+.face[data-emotion='annoyed'] .face__eye-look {
+  transform: scaleY(0.88);
+}
+
+.face[data-emotion='annoyed'] .face__eye--l .face__lid--top {
+  transform: translateY(-58%) rotate(15deg);
+}
+
+.face[data-emotion='annoyed'] .face__eye--r .face__lid--top {
+  transform: translateY(-58%) rotate(-15deg);
+}
+
+.face[data-emotion='annoyed'] .face__mouth {
+  translate: -8% 0;
+  rotate: -4deg;
+  scale: 0.55 1;
+}
+
+.face[data-emotion='thinking'] {
+  --tilt: 4deg;
+}
+
+.face[data-emotion='thinking'] .face__eye-look {
+  transform: translate(-14%, -12%);
+}
+
+.face[data-emotion='thinking'] .face__eye--r .face__lid--top {
+  transform: translateY(-80%);
+}
+
+.face[data-emotion='thinking'] .face__mouth {
+  translate: -12% 0;
+  scale: 0.35 1;
+}
+
+.face[data-emotion='sleepy'] {
+  --drop: 3%;
+}
+
+.face[data-emotion='sleepy'] .face__lid--top {
+  transform: translateY(-46%);
+}
+
+.face[data-emotion='sleepy'] .face__eye-look {
+  transform: translateY(6%);
+}
+
+.face[data-emotion='sleepy'] .face__mouth {
+  scale: 0.4 1;
+}
+
+/* -------------------------------------------------------------------- card */
+
+.face__card {
+  position: absolute;
+  left: 50%;
+  top: 70%;
+  width: 78%;
+  transform: translate(-50%, -38%);
+  text-align: center;
+  font-family: var(--font-ui);
+  color: var(--face-ink);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 300ms ease,
+    transform 500ms var(--face-spring);
+}
+
+.face[data-card='true'] .face__card {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+
+.face[data-card='true'] .face__head {
+  transform: translateY(-22%) scale(0.6);
+}
+
+.face__card-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(18px * var(--u));
+}
+
+.face__card-icon {
+  flex: none;
+  width: calc(96px * var(--u));
+  height: calc(96px * var(--u));
+  color: var(--face-accent);
+  filter: drop-shadow(0 0 calc(10px * var(--u)) color-mix(in srgb, var(--face-accent) 60%, transparent));
+}
+
+.face__card-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.face__card-value {
+  font-size: calc(104px * var(--u));
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: 0 0 calc(24px * var(--u)) color-mix(in srgb, var(--face-accent) 45%, transparent);
+}
+
+.face__card[data-long='true'] .face__card-value {
+  font-size: calc(70px * var(--u));
+}
+
+.face__card-label {
+  max-width: 82%;
+  margin: calc(12px * var(--u)) auto 0;
+  overflow: hidden;
+  font-size: calc(32px * var(--u));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--face-accent);
+}
+
 /* -------------------------------------------- idle motion (only on screen) */
+
+.face[data-active='true']:is([data-emotion='laugh'], [data-emotion='excited']) .face__tilt {
+  animation: face-bounce 0.36s ease-in-out 4;
+}
+
+.face[data-active='true'] .face__accent[data-on='true'] {
+  animation: face-float 2.4s ease-in-out infinite;
+}
 
 .face[data-active='true'][data-state='sleeping'] .face__head {
   animation: face-breathe 4.5s ease-in-out infinite;
 }
 
-.face[data-active='true']:is([data-state='listening'], [data-state='thinking'], [data-state='speaking']) .face__eye-inner,
-.face[data-active='true'][data-state='countdown'][data-count='running'] .face__eye-inner {
-  animation: face-blink 5.3s infinite;
+.face[data-active='true'][data-state='listening'] .face__tilt {
+  animation: face-lean 2.6s ease-in-out infinite;
+}
+
+.face[data-active='true'][data-state='thinking'] .face__eye-look {
+  animation: face-ponder 3.2s ease-in-out infinite alternate;
 }
 
 .face[data-active='true'][data-state='countdown'][data-count='final'] .face__glow {
@@ -387,14 +765,34 @@
   }
 }
 
-@keyframes face-blink {
-  0%,
-  92%,
-  100% {
-    transform: scaleY(1);
+@keyframes face-lean {
+  50% {
+    scale: 1.025;
   }
-  95% {
-    transform: scaleY(0.08);
+}
+
+@keyframes face-ponder {
+  from {
+    translate: 0% 0%;
+  }
+  to {
+    translate: -24% 3%;
+  }
+}
+
+@keyframes face-bounce {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translateY(-2.2%);
+  }
+}
+
+@keyframes face-float {
+  50% {
+    transform: translateY(-14%);
   }
 }
 

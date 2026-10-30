@@ -7,9 +7,25 @@
 
 export type FaceState = 'sleeping' | 'listening' | 'thinking' | 'speaking' | 'offline' | 'error' | 'alarm' | 'countdown';
 
+export type Emotion =
+  | 'neutral'
+  | 'happy'
+  | 'laugh'
+  | 'confused'
+  | 'surprised'
+  | 'sad'
+  | 'annoyed'
+  | 'thinking'
+  | 'excited'
+  | 'wink'
+  | 'sleepy';
+
+/** `offset` is in 20 ms frames from the start of speech, like `mouth`; null means now. */
 export type AssistantMessage =
   | { type: 'state'; state: FaceState; at?: number; followUp?: boolean; reason?: string; until?: number; restart?: boolean }
   | { type: 'mouth'; offset: number; env: string }
+  | { type: 'emotion'; name: Emotion; offset: number | null }
+  | { type: 'card'; icon: string; value: string; label: string; offset: number | null }
   | { type: 'status'; mic: string | null; online?: boolean };
 
 export interface AssistantSource {
