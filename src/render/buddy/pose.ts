@@ -25,6 +25,8 @@ export interface Pose {
   tip: number;
   /** Body lowered by this much (sitting). */
   sink: number;
+  /** Whole figure lifted off its shadow (hopping). */
+  air: number;
   lookX: number;
   lookY: number;
   lidL: number;
@@ -87,6 +89,7 @@ export const BASE: Pose = {
   squash: 1,
   tip: 0,
   sink: 0,
+  air: 0,
   lookX: 0,
   lookY: 0,
   lidL: 0.12,
@@ -202,6 +205,14 @@ export class PoseSpring {
     this.target = target;
     Object.assign(this.now, target);
     for (const key of Object.keys(this.vel)) this.vel[key] = 0;
+  }
+
+  /** Moves these keys straight there, at rest. */
+  place(values: Partial<Pose>): void {
+    for (const [key, value] of Object.entries(values) as [Key, number][]) {
+      this.now[key] = value;
+      this.vel[key] = 0;
+    }
   }
 
   step(dtMs: number): boolean {

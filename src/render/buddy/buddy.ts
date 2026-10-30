@@ -23,6 +23,13 @@ const CLOSE: Partial<Pose> = { x: 320, y: 494, scale: 2.7 };
 const CLOSE_SIGN: Partial<Pose> = { x: 200, y: 540, scale: 2.2 };
 const FAREWELL: Partial<Pose> = { x: 320, y: 610, scale: 1.45 };
 
+/** A change of scale reads as this many pixels of walking toward the viewer. */
+const SCALE_PX = 110;
+/** Walking pace in 640-space px/s: hurrying up close and back, an amble on his own. */
+const TRAVEL_FAST = 240;
+const TRAVEL_SLOW = 80;
+const RIDE_HOP_MS = 420;
+
 const OPEN: Hands = { gloveL: 'open', gloveR: 'open' };
 
 const HAND_KEYS: (keyof Pose)[] = ['handLx', 'handLy', 'handRx', 'handRy', 'rotL', 'rotR', 'bendL', 'bendR'];
@@ -48,6 +55,10 @@ type Cue = Extract<AssistantMessage, { type: 'emotion' } | { type: 'card' }>;
 
 function between(min: number, max: number): number {
   return min + Math.random() * (max - min);
+}
+
+function smooth(u: number): number {
+  return u * u * (3 - 2 * u);
 }
 
 function wrap(deg: number): number {
@@ -96,6 +107,11 @@ export class Buddy {
   private walkW = 0;
   private ride: { offset: number; radius: number } | null = null;
   private rideW = 0;
+  private travel: { x: number; y: number; scale: number } | null = null;
+  private travelSpeed = 0;
+  private travelDir = 0;
+  private hop: { x: number; y: number; start: number; ms: number; height: number } | null = null;
+  private hopU = 0;
   private drawn: Pose | null = null;
   private blinkUntil = 0;
   private nextBlink = 0;
@@ -259,7 +275,9 @@ export class Buddy {
 
     const intent = this.active ? null : this.life.update(now);
     const target = intent ? this.ambientTarget(intent) : this.stageTarget();
-    this.spring.set(compose(target.pose));
+    const goal = compose(target.pose);
+    this.travelTo(goal, now, dt);
+    this.spring.set(goal);
     this.hands = target.hands;
     let moving = false;
     for (let left = dt; left > 0; left -= 16) moving = this.spring.step(Math.min(16, left)) || moving;
@@ -269,7 +287,7 @@ export class Buddy {
     const asleep = (intent?.asleep ?? false) || (this.state === 'countdown' && !this.restart && Date.now() >= this.countdownUntil);
     this.layer(p, now, dt, t, intent, asleep);
 
-    const fast = moving || this.walkW > 0.05 || this.ride !== null || intent?.motion === 'sing' || intent?.motion === 'dance' || this.speechStart !== null || this.state === 'alarm' || this.emotion === 'laugh';
+    const fast = moving || this.walkW > 0.05 || this.hop !== null || this.ride !== null || intent?.motion === 'sing' || intent?.motion === 'dance' || this.speechStart !== null || this.state === 'alarm' || this.emotion === 'laugh';
     const fps = fast ? 24 : asleep ? 6 : 12;
     if (fps < 24 || ++this.draws % 2 === 0) this.boil = (this.boil + 1) % 3;
     this.draw(p, t);
@@ -295,15 +313,28 @@ export class Buddy {
       }
     }
 
-    const walking = intent?.motion === 'walk' && !calm;
+    if (this.hop) {
+      const arc = Math.sin(Math.PI * this.hopU);
+      p.air += arc * this.hop.height;
+      p.squash *= 1 + arc * 0.1;
+      p.footLy -= arc * 4;
+      p.footRy -= arc * 4;
+    }
+
+    const strolling = intent?.motion === 'walk';
+    const travelling = this.travelSpeed > 12 && !this.hop && this.rideW < 0.01;
+    const walking = (strolling || travelling) && !calm;
     this.walkW += ((walking ? 1 : 0) - this.walkW) * Math.min(1, dt / 120);
     if (this.walkW > 0.01) {
-      const dir = intent?.dir ?? 1;
-      this.walkPhase += (dt / 1000) * Math.PI * 2 * 1.5;
+      const dir = strolling ? (intent?.dir ?? 1) : this.travelDir;
+      const hz = strolling ? 1.5 : Math.min(3.4, 1.5 + this.travelSpeed / 110);
+      this.walkPhase += (dt / 1000) * Math.PI * 2 * hz;
       const s = Math.sin(this.walkPhase);
       const w = this.walkW;
-      p.footLx += s * 8 * w;
-      p.footRx -= s * 8 * w;
+      const stride = 0.35 + 0.65 * Math.abs(dir);
+      if (!strolling) p.turn += 0.5 * dir * w;
+      p.footLx += s * 8 * stride * w;
+      p.footRx -= s * 8 * stride * w;
       p.footLy -= Math.max(0, Math.cos(this.walkPhase)) * 6 * w;
       p.footRy -= Math.max(0, -Math.cos(this.walkPhase)) * 6 * w;
       p.sink -= Math.abs(s) * 2.5 * w;
@@ -371,18 +402,21 @@ export class Buddy {
     if (want) this.ride.radius = want.radius;
     const rot = wrap(angle + this.ride.offset - 90);
     const hold = want !== null || (Math.abs(rot) > 12 && this.world.discSpinning());
-    this.rideW += ((hold ? 1 : 0) - this.rideW) * Math.min(1, dt / 350);
-    if (!hold && this.rideW < 0.01) {
+    this.rideW = Math.min(1, Math.max(0, this.rideW + ((hold ? 1 : -1) * dt) / RIDE_HOP_MS));
+    if (!hold && this.rideW <= 0) {
       this.ride = null;
-      this.rideW = 0;
       return;
     }
     const r = this.ride.radius;
     const rad = (rot * Math.PI) / 180;
     const disc = this.life.disc;
-    const w = this.rideW;
+    const w = smooth(this.rideW);
+    const y = disc.y + r * Math.cos(rad);
+    const arc = prefersReducedMotion() ? 0 : Math.sin(Math.PI * this.rideW);
+    p.air += arc * (18 + Math.abs(y - p.y) * 0.3);
+    p.squash *= 1 + arc * 0.1;
     p.x += (disc.x - r * Math.sin(rad) - p.x) * w;
-    p.y += (disc.y + r * Math.cos(rad) - p.y) * w;
+    p.y += (y - p.y) * w;
     p.rot += (rot - p.rot) * w;
     p.shadow *= 1 - 0.75 * w;
   }
@@ -406,10 +440,60 @@ export class Buddy {
   /** Off the record mid-ride: the springs carry on from where he is drawn. */
   private letGo(): void {
     if (!this.ride || !this.drawn) return;
-    const { x, y, rot } = this.drawn;
+    const { x, y, rot, scale } = this.drawn;
     Object.assign(this.spring.now, { x, y, rot });
+    this.travel = { x, y, scale };
+    this.hop = null;
     this.ride = null;
     this.rideW = 0;
+  }
+
+  /**
+   * Feeds the springs a position that walks toward the goal at his own pace,
+   * so moves read as walking (or a hop, for a straight drop or climb) rather
+   * than a glide.
+   */
+  private travelTo(goal: Pose, now: number, dt: number): void {
+    const at = this.travel;
+    if (!at || prefersReducedMotion()) {
+      this.travel = { x: goal.x, y: goal.y, scale: goal.scale };
+      this.travelSpeed = 0;
+      this.hop = null;
+      return;
+    }
+    let speed = 0;
+    if (this.hop) {
+      const u = Math.min(1, (now - this.hop.start) / this.hop.ms);
+      this.hopU = u;
+      at.x = this.hop.x + (goal.x - this.hop.x) * u;
+      at.y = this.hop.y + (goal.y - this.hop.y) * u;
+      at.scale = goal.scale;
+      this.spring.place({ x: at.x, y: at.y });
+      if (u >= 1) this.hop = null;
+    } else {
+      const dx = goal.x - at.x;
+      const dy = goal.y - at.y;
+      const ds = (goal.scale - at.scale) * SCALE_PX;
+      const d = Math.hypot(dx, dy, ds);
+      const step = ((this.active || at.scale > 1.05 ? TRAVEL_FAST : TRAVEL_SLOW) * dt) / 1000;
+      if (!this.active && d > 10 && Math.abs(dy) > 2 * Math.abs(dx) && Math.abs(ds) < 5) {
+        this.hop = { x: at.x, y: at.y, start: now, ms: 360 + Math.abs(dy) * 1.5, height: 14 + Math.abs(dy) * 0.35 };
+        this.hopU = 0;
+      } else if (d <= step) {
+        Object.assign(at, { x: goal.x, y: goal.y, scale: goal.scale });
+        speed = (d * 1000) / dt;
+      } else {
+        at.x += (dx * step) / d;
+        at.y += (dy * step) / d;
+        at.scale += ((ds / SCALE_PX) * step) / d;
+        speed = (step * 1000) / dt;
+        this.travelDir = dx / d;
+      }
+    }
+    this.travelSpeed += (speed - this.travelSpeed) * Math.min(1, dt / 100);
+    goal.x = at.x;
+    goal.y = at.y;
+    goal.scale = at.scale;
   }
 
   private layerSpeech(p: Pose): void {

@@ -73,10 +73,11 @@ export function drawBuddy(ctx: CanvasRenderingContext2D, p: Pose, hands: Hands, 
   if (p.shadow > 0.01) {
     ctx.fillStyle = `rgba(0,0,0,${(0.32 * p.shadow).toFixed(3)})`;
     ctx.beginPath();
-    ctx.ellipse(0, 1, 30 * p.shadow, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 1, (30 * p.shadow) / (1 + p.air / 60), 5 / (1 + p.air / 60), 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
+  ctx.translate(0, -p.air);
   ctx.rotate((p.rot * Math.PI) / 180);
 
   const body = new DOMMatrix()
