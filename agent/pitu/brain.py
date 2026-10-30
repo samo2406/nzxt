@@ -233,7 +233,9 @@ class Brain:
                     )
                 for outcome in outcomes:
                     if outcome.spoken:
-                        sink.speak(outcome.spoken + " ")
+                        # The face reacts to how it went; a cue the model put in `say` comes later and wins.
+                        mood = "{sad}" if outcome.tool_result.get("is_error") else "{happy}"
+                        sink.speak(mood + outcome.spoken + " ")
                 results = [o.tool_result for o in outcomes]
                 if not any(o.needs_reply for o in outcomes):
                     # The reply was already spoken from the tool input; the

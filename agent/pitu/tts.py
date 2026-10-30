@@ -144,6 +144,7 @@ class TextToSpeech:
         self._streaming = True
         self._synth: speechsdk.SpeechSynthesizer | None = None
         self._on_audio: Callable[[bytes], None] = lambda _b: None
+        self._on_word: Callable[[str, float], None] = lambda _w, _ms: None
         self.simulate_failure = False
 
     @property
@@ -156,6 +157,7 @@ class TextToSpeech:
                 speech_config=_speech_config(self._cfg, self._streaming), audio_config=None
             )
             synth.synthesizing.connect(lambda e: self._on_audio(e.result.audio_data))
+            synth.synthesis_word_boundary.connect(self._word)
             self._synth = synth
         return self._synth
 
@@ -166,10 +168,19 @@ class TextToSpeech:
         except Exception as err:
             log.debug("tts prewarm failed: %s", err)
 
-    def begin(self, on_audio: Callable[[bytes], None]) -> Utterance:
+    def _word(self, e: speechsdk.SpeechSynthesisWordBoundaryEventArgs) -> None:
+        if e.boundary_type == speechsdk.SpeechSynthesisBoundaryType.Word:
+            self._on_word(e.text, e.audio_offset / 10_000)
+
+    def begin(
+        self, on_audio: Callable[[bytes], None], on_word: Callable[[str, float], None] | None = None
+    ) -> Utterance:
+        """`on_word(word, ms)` gets each word's start in the utterance's audio. Only in
+        text-stream mode: per-clause requests each count from zero."""
         if self.simulate_failure:
             raise TtsError("simulated failure")
         self._on_audio = on_audio
+        self._on_word = on_word if on_word and self._streaming else (lambda _w, _ms: None)
         synth = self._synthesizer()
         if self._streaming:
             return _StreamingUtterance(synth, self._cfg.tts_rate)

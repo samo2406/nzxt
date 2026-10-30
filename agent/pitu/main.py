@@ -9,6 +9,7 @@ import logging
 import math
 import os
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from logging.handlers import RotatingFileHandler
@@ -26,6 +27,7 @@ from .config import DATA_DIR, Config, load_config
 from .ducking import DUCKER
 from .events import DebugLogHandler, Events
 from .face_server import FaceServer
+from .markup import Cue, MarkupFilter
 from .phrases import PhraseCache
 from .stt import SpeechToText, SttError
 from .tts import TextToSpeech, TtsError, Utterance
@@ -46,6 +48,11 @@ ALARM_REPEATS = 2
 TIMER_POLL_S = 30.0
 # The face counts the last seconds before a voice-ordered shutdown.
 COUNTDOWN_S = 10
+FACE_FRAME_MS = 20
+# A word Azure reports is looked for this far ahead in the spoken text; numbers it
+# normalises ("12" → "dvanásť") are skipped rather than matched somewhere later.
+WORD_LOOKAHEAD = 40
+PHRASE_EMOTIONS = {"offline": "sad", "no_keys": "sad", "busy": "sleepy", "slow": "sleepy", "broken": "confused"}
 
 
 @dataclass
@@ -81,21 +88,28 @@ class Timings:
 
 
 class TurnSpeaker:
-    """Bridges one streamed reply to TTS, the speakers and the face's mouth."""
+    """Bridges one streamed reply to TTS, the speakers and the face: the mouth
+    follows the audio, and the model's inline cues are cut out of the text and
+    sent when the word they stand before is spoken."""
 
     def __init__(self, app: Assistant, timings: Timings) -> None:
         self._app = app
         self._timings = timings
         self._utt: Utterance | None = None
         self._playback: Playback | Fanout | None = None
-        self._text: list[str] = []
+        self._markup = MarkupFilter()
+        self._lock = threading.Lock()
+        self._cues: list[Cue] = []
+        # (position in the spoken text, face frame) of each word Azure has timed.
+        self._words: list[tuple[int, int]] = []
+        self._cursor = 0
         self._env_carry = b""
         self._env_frames = 0
         self._heard_audio = False
 
     @property
     def text(self) -> str:
-        return "".join(self._text).strip()
+        return self._markup.spoken.strip()
 
     def mark(self, name: str) -> None:
         self._timings.marks.setdefault(name, time.monotonic())
@@ -103,15 +117,54 @@ class TurnSpeaker:
     def speak(self, text: str) -> None:
         if not text:
             return
-        self._text.append(text)
+        clean, cues = self._markup.feed(text)
+        if cues:
+            with self._lock:
+                self._cues.extend(cues)
+            self._release(final=self._app.print_only)
+        if not clean:
+            return
         if self._app.print_only:
-            print(text, end="", flush=True)
+            print(clean, end="", flush=True)
             return
         if self._utt is None:
             self._playback = self._app.speakers.open()
             self._playback.on_start = self._on_playback_start
-            self._utt = self._app.tts.begin(self._on_audio)
-        self._utt.write(text)
+            self._utt = self._app.tts.begin(self._on_audio, self._on_word)
+        self._utt.write(clean)
+
+    def _on_word(self, word: str, ms: float) -> None:
+        spoken = self._markup.spoken
+        at = spoken.find(word, self._cursor, self._cursor + WORD_LOOKAHEAD + len(word))
+        if at < 0:
+            return
+        self._cursor = at + len(word)
+        with self._lock:
+            self._words.append((at, round(ms / FACE_FRAME_MS)))
+        self._release()
+
+    def _release(self, final: bool = False) -> None:
+        """Sends each cue once a word at or after it has been timed; at the end the
+        rest go out at an estimate from how far into the text they stood."""
+        ready: list[tuple[Cue, int | None]] = []
+        with self._lock:
+            waiting = []
+            for cue in self._cues:
+                frame = next((f for at, f in self._words if at >= cue.at), None)
+                if frame is None and final:
+                    if self._app.print_only or not self._env_frames:
+                        frame = None
+                    else:
+                        frame = round(self._env_frames * cue.at / max(1, len(self._markup.spoken)))
+                    ready.append((cue, frame))
+                elif frame is None:
+                    waiting.append(cue)
+                else:
+                    ready.append((cue, frame))
+            self._cues = waiting
+        for cue, frame in ready:
+            log.debug("face cue at frame %s: %s", frame, cue.message)
+            self._app.events.emit({**cue.message, "offset": frame})
 
     def _on_playback_start(self, wall: float) -> None:
         self._timings.audio = time.monotonic()
@@ -134,10 +187,11 @@ class TurnSpeaker:
 
     async def finish(self) -> None:
         if self._app.print_only:
-            if self._text:
+            if self._markup.spoken:
                 print()
             return
         if self._utt is None or self._playback is None:
+            self._release(final=True)
             return
         self._utt.close()
         try:
@@ -149,9 +203,10 @@ class TurnSpeaker:
             # reply clause by clause and stay on that path from now on.
             self._app.tts.fall_back_to_chunks()
             self._utt = self._app.tts.begin(self._on_audio)
-            self._utt.write("".join(self._text))
+            self._utt.write(self._markup.spoken)
             self._utt.close()
             await self._utt.wait()
+        self._release(final=True)
         self._playback.finish()
         await asyncio.to_thread(self._playback.wait, 120)
 
@@ -224,6 +279,7 @@ class Assistant:
     async def say_phrase(self, key: str) -> None:
         offline = key in ("offline", "no_keys")
         self.events.set_state("offline" if offline else "error", reason=key)
+        self.events.emit({"type": "emotion", "name": PHRASE_EMOTIONS.get(key, "sad"), "offset": None})
         pcm = self.phrases.get(key)
         if self.print_only:
             print(f"[{key}]")
