@@ -350,16 +350,22 @@ class Speakers:
 
     What the first one renders is the echo canceller's reference, so list the
     output the mic actually hears (the speakers, not headphones) first.
+    A name may end in `@gain` (e.g. `CS43131@0.5`) to play that output quieter.
     """
 
     def __init__(self, device_hint: str = "", volume: float = 1.0) -> None:
-        self._hints = [h.strip() for h in device_hint.split(",") if h.strip()] or [""]
+        self._hints = [_gain_hint(h) for h in device_hint.split(",") if h.strip()] or [("", 1.0)]
         self.volume = volume
         self.on_render: Callable[[bytes], None] | None = None
 
     def open(self) -> Playback | Fanout:
-        devices = list(dict.fromkeys(find_device(h, "output") for h in self._hints))
-        playbacks = [Playback(d, self.volume, self.on_render if i == 0 else None) for i, d in enumerate(devices)]
+        devices: dict[int | None, float] = {}
+        for h, gain in self._hints:
+            devices.setdefault(find_device(h, "output"), gain)
+        playbacks = [
+            Playback(d, self.volume * gain, self.on_render if i == 0 else None)
+            for i, (d, gain) in enumerate(devices.items())
+        ]
         return playbacks[0] if len(playbacks) == 1 else Fanout(playbacks)
 
     def play(self, pcm: bytes, on_start: Callable[[float], None] | None = None) -> Playback | Fanout:
@@ -369,6 +375,15 @@ class Speakers:
         pb.feed(pcm)
         pb.finish()
         return pb
+
+
+def _gain_hint(hint: str) -> tuple[str, float]:
+    name, _, gain = hint.strip().partition("@")
+    try:
+        return name.strip(), min(1.0, max(0.0, float(gain))) if gain else 1.0
+    except ValueError:
+        log.warning("ignoring bad gain in speaker device %r", hint)
+        return name.strip(), 1.0
 
 
 def tone(freqs: list[tuple[float, float]], gain: float = 0.25) -> bytes:
