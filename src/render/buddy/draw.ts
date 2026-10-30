@@ -106,7 +106,7 @@ export function drawBuddy(ctx: CanvasRenderingContext2D, p: Pose, hands: Hands, 
     const hx = side === 1 ? p.handLx : p.handRx;
     const hy = side === 1 ? p.handLy : p.handRy;
     const hand: Pt = [shoulder[0] + hx, shoulder[1] + hy];
-    const bend = (side === 1 ? p.bendL : p.bendR) * side * 6;
+    const bend = -(side === 1 ? p.bendL : p.bendR) * side * 6;
     limb(ctx, shoulder, hand, bend, 4);
     glove(ctx, hand, side === 1 ? p.rotL : p.rotR, side === 1 ? hands.gloveL : hands.gloveR, side, ink);
   }
