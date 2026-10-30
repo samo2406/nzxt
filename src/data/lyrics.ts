@@ -49,7 +49,9 @@ export function parseLrc(lrc: string): Lyrics {
   return { lines };
 }
 
-const ATTEMPTS = 3;
+/** LRCLIB is often overloaded for minutes at a time but lets the odd request through. */
+const BUSY_BUDGET_MS = 120_000;
+const BUSY_MAX_WAIT_S = 8;
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -61,15 +63,17 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-/** LRCLIB sheds load with 503/429 + Retry-After; honour it with a little jitter. */
+/** LRCLIB sheds load with 503/429 + Retry-After; keep trying with a backoff and a little jitter. */
 async function getJson(url: string, signal: AbortSignal): Promise<unknown> {
-  for (let attempt = 1; ; attempt++) {
+  const started = Date.now();
+  for (let attempt = 0; ; attempt++) {
     const res = await fetch(url, { signal });
     if (res.status === 404) return null;
     if (res.ok) return res.json();
-    if ((res.status !== 503 && res.status !== 429) || attempt >= ATTEMPTS) throw new Error(`lrclib ${res.status}`);
-    const wait = Math.max(1, Number(res.headers.get('retry-after')) || 1) * 1000 * attempt;
-    await sleep(wait + Math.random() * 400, signal);
+    if ((res.status !== 503 && res.status !== 429) || Date.now() - started > BUSY_BUDGET_MS) throw new Error(`lrclib ${res.status}`);
+    const asked = Number(res.headers.get('retry-after')) || 1;
+    const wait = Math.max(asked, Math.min(BUSY_MAX_WAIT_S, 2 ** attempt)) * 1000;
+    await sleep(wait + Math.random() * 600, signal);
   }
 }
 
