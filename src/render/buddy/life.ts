@@ -1,3 +1,4 @@
+import type { LyricState } from '../lyrics';
 import type { Hands, Pose } from './pose';
 
 export type Anchor = 'clock' | 'date' | 'weather' | 'cpu' | 'gpu';
@@ -13,6 +14,8 @@ export interface World {
   discAngle(): number;
   discSpinning(): boolean;
   anchor(name: Anchor): Point | null;
+  /** The line of the song playing now, when synced lyrics are showing. */
+  lyric(): LyricState | null;
 }
 
 export type WorldEvent =
@@ -23,7 +26,7 @@ export type WorldEvent =
   | { kind: 'screen' };
 
 /** A procedural motion the buddy layers on top of the springs. */
-export type Motion = 'walk' | 'fan' | 'nod' | 'sway' | null;
+export type Motion = 'walk' | 'fan' | 'nod' | 'sway' | 'sing' | 'dance' | null;
 
 export interface Ride {
   /** Ground point's distance from the disc centre. */
@@ -39,9 +42,18 @@ export interface Intent {
   ride: Ride | null;
   /** Asleep: the frame rate drops and he breathes slowly. */
   asleep: boolean;
+  /** The line he's singing, for his mouth. */
+  lyric: LyricState | null;
 }
 
-type Kind = 'stand' | 'sit' | 'sleep' | 'walk' | 'look' | 'point' | 'wrist' | 'fan' | 'ride' | 'label' | 'dizzy' | 'nod' | 'ooh';
+type Kind =
+  | 'stand' | 'sit' | 'sleep' | 'walk' | 'look' | 'point' | 'wrist' | 'fan'
+  | 'ride' | 'label' | 'dizzy' | 'nod' | 'ooh' | 'sing' | 'dance' | 'chill';
+
+/** Following the lyrics: these last until a line change picks the next one. */
+const SONG: Kind[] = ['sing', 'dance', 'chill'];
+/** Busy with something else: a line change waits until it's done. */
+const BUSY: Kind[] = ['walk', 'fan', 'wrist', 'ooh', 'look', 'point'];
 
 interface Activity {
   kind: Kind;
@@ -62,6 +74,8 @@ const WALK_SPEED = 26;
 /** At most one reaction to the screen per this long, so he mostly lets things be. */
 const REACT_GAP_MS = 20_000;
 const TEMP_STEP_C = 3;
+/** A song mode holds at least this long, so he doesn't flicker between lines. */
+const SONG_HOLD_MS = 7000;
 
 const SIT: Partial<Pose> = {
   sink: 20,
@@ -111,6 +125,9 @@ export class Life {
   private hotBy = { cpu: false, gpu: false };
   private clock = 0;
   private last = 0;
+  private lyricIndex = -2;
+  private modeSince = 0;
+  private lyric: LyricState | null = null;
 
   constructor(
     private readonly world: World,
@@ -206,9 +223,39 @@ export class Life {
     this.last = nowMs;
     this.clock += dt * this.speed;
 
+    this.lyric = this.music() ? this.world.lyric() : null;
+    if (this.lyric && this.lyric.index !== this.lyricIndex) {
+      this.lyricIndex = this.lyric.index;
+      this.onLine(this.lyric);
+    }
+    if (!this.lyric && SONG.includes(this.act.kind)) this.act.until = 0;
+
     if (this.act.kind === 'walk') this.stepWalk(dt);
     else if (this.now() >= this.act.until) this.next();
     return this.intent();
+  }
+
+  private music(): boolean {
+    return this.world.screen() === 'spotify' && this.world.discSpinning() && !this.calm();
+  }
+
+  /**
+   * Each new line may change what he does: the refrain is mostly sung, verses
+   * get a mix of singing and chilling, breaks are for dancing. Never singing
+   * over silence.
+   */
+  private onLine(line: LyricState): void {
+    if (BUSY.includes(this.act.kind)) return;
+    const want = line.gap
+      ? pick<Kind>([['dance', 3], ['chill', 1]])
+      : line.repeated
+        ? pick<Kind>([['sing', 6], ['dance', 2], ['chill', 1]])
+        : pick<Kind>([['sing', 3], ['chill', 4], ['dance', 2]]);
+    if (want === this.act.kind) return;
+    const held = this.now() - this.modeSince >= SONG_HOLD_MS || !SONG.includes(this.act.kind);
+    if (!held && !(line.gap && this.act.kind === 'sing')) return;
+    this.modeSince = this.now();
+    this.begin({ kind: want, until: Infinity });
   }
 
   private stepWalk(dt: number): void {
@@ -228,7 +275,12 @@ export class Life {
       this.begin({ kind: prev.then, until: this.after(prev.then === 'sit' ? between(20, 60) : between(8, 20)) });
       return;
     }
-    if (this.world.screen() === 'spotify' && this.world.discSpinning() && !this.calm()) {
+    if (this.music()) {
+      if (this.lyric) {
+        this.lyricIndex = -2;
+        this.begin({ kind: 'chill', until: Infinity });
+        return;
+      }
       this.nextMusic(prev.kind);
       return;
     }
@@ -297,6 +349,7 @@ export class Life {
       dir: 1,
       ride: null,
       asleep: false,
+      lyric: null,
       ...extra,
     });
     switch (act.kind) {
@@ -339,6 +392,16 @@ export class Life {
         return out({ dizzy: 1, smile: -0.1, mouthW: 0.8, mouthOpen: 0.15 }, { motion: 'sway' });
       case 'nod':
         return out({ notes: 0.8, joy: 1, smile: 0.9 }, { motion: 'nod' });
+      case 'sing': {
+        const flip = (this.lyric?.index ?? 0) % 2 === 0;
+        const reach = { handLx: 24, handLy: -16, rotL: -105, handRx: -20, handRy: 6, rotR: 60 };
+        const arms = flip ? reach : { handRx: -24, handRy: -16, rotR: 105, handLx: 20, handLy: 6, rotL: -60 };
+        return out({ ...arms, lookY: -0.35, browY: 0.5, smile: 0.4, notes: 0.8, joy: this.lyric?.repeated ? 1 : 0 }, { motion: 'sing', lyric: this.lyric });
+      }
+      case 'dance':
+        return out({ handLx: 16, handLy: -36, rotL: -160, handRx: -16, handRy: -36, rotR: 160, joy: 0.6, smile: 1, notes: 0.5 }, { motion: 'dance' });
+      case 'chill':
+        return out({ ...SIT, joy: 1, smile: 0.7, notes: 0.5 }, { motion: 'nod' });
       default:
         return out(this.idleGlance());
     }

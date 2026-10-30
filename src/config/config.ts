@@ -155,9 +155,9 @@ function assistantPanel(): HTMLElement {
   connect();
   return section(
     'Asistent Piťu',
-    'Tvár hlasového asistenta. Keď ho oslovíte („Hej Piťu“), prevezme displej a po rozhovore ho vráti. Agent beží na tomto PC (priečinok agent/).',
+    'Piťu býva na displeji stále. Keď ho oslovíte („Hej Piťu“), príde bližšie a po rozhovore sa vráti k svojim veciam. Agent beží na tomto PC (priečinok agent/).',
     el('div', { class: 'row' }, status, mic),
-    toggleField('Zobrazovať tvár asistenta', a.enabled, (enabled) => {
+    toggleField('Pripojiť k agentovi', a.enabled, (enabled) => {
       updateSettings({ assistant: { enabled } });
       connect();
     }),

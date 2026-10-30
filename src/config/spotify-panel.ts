@@ -1,6 +1,6 @@
 import { getSettings, updateSettings } from '../data/settings';
 import { beginAuth, completeAuth, disconnect, isConnected, onAuthChange } from '../data/spotify';
-import { formatSeconds, rangeField } from './controls';
+import { formatSeconds, rangeField, toggleField } from './controls';
 import { el, section } from './dom';
 
 export class SpotifyPanel {
@@ -45,6 +45,7 @@ export class SpotifyPanel {
         { min: 1, max: 40, step: 1, value: s.rotationRpm, format: (v) => `${v} ot./min` },
         (rotationRpm) => updateSettings({ spotify: { rotationRpm } }),
       ),
+      toggleField('Text piesne (LRCLIB)', s.lyrics, (lyrics) => updateSettings({ spotify: { lyrics } })),
     );
 
     this.unsubscribe = onAuthChange(() => this.render());

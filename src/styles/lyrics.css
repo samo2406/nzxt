@@ -1,0 +1,67 @@
+/* Upper half of the record: Piťu has the bottom, the label the middle. */
+.lyrics {
+  position: absolute;
+  left: 50%;
+  top: 31%;
+  width: calc(470px * var(--u));
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(10px * var(--u));
+  text-align: center;
+  font-family: var(--font-ui);
+  color: #fff;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+
+.lyrics[data-on='true'] {
+  opacity: 1;
+}
+
+/* A soft dark pool behind the words, so they hold on bright covers. */
+.lyrics::before {
+  content: '';
+  position: absolute;
+  inset: -28% -8%;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+}
+
+.lyrics__line {
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  text-shadow: 0 calc(2px * var(--u)) calc(10px * var(--u)) rgba(0, 0, 0, 0.75);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lyrics__line[data-size='l'] {
+  font-size: calc(36px * var(--u));
+}
+
+.lyrics__line[data-size='m'] {
+  font-size: calc(30px * var(--u));
+}
+
+.lyrics__line[data-size='s'] {
+  font-size: calc(25px * var(--u));
+}
+
+.lyrics__next {
+  max-width: 92%;
+  font-size: calc(21px * var(--u));
+  font-weight: 600;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: 0 calc(1px * var(--u)) calc(6px * var(--u)) rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

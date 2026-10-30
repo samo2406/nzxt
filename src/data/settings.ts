@@ -15,6 +15,8 @@ export interface Settings {
     /** How long the music screen lingers after playback stops. */
     fallbackMs: number;
     rotationRpm: number;
+    /** Synced lyrics from LRCLIB over the record. */
+    lyrics: boolean;
   };
   telemetry: {
     enabled: boolean;
@@ -46,6 +48,7 @@ export const DEFAULTS: Settings = {
     clientId: '',
     fallbackMs: 20_000,
     rotationRpm: 6,
+    lyrics: true,
   },
   telemetry: {
     enabled: true,

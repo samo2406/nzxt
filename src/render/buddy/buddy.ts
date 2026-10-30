@@ -3,6 +3,7 @@ import { prefersReducedMotion } from '../../core/env';
 import type { AssistantMessage, Emotion, FaceState } from '../../data/assistant';
 import type { Settings } from '../../data/settings';
 import { drawBuddy, type Sign } from './draw';
+import type { LyricState } from '../lyrics';
 import { Life, type Intent, type World, type WorldEvent } from './life';
 import { EMOTION_LOOKS, PoseSpring, compose, type Hands, type Look, type Pose } from './pose';
 
@@ -268,7 +269,7 @@ export class Buddy {
     const asleep = (intent?.asleep ?? false) || (this.state === 'countdown' && !this.restart && Date.now() >= this.countdownUntil);
     this.layer(p, now, dt, t, intent, asleep);
 
-    const fast = moving || this.walkW > 0.05 || this.ride !== null || this.speechStart !== null || this.state === 'alarm' || this.emotion === 'laugh';
+    const fast = moving || this.walkW > 0.05 || this.ride !== null || intent?.motion === 'sing' || intent?.motion === 'dance' || this.speechStart !== null || this.state === 'alarm' || this.emotion === 'laugh';
     const fps = fast ? 24 : asleep ? 6 : 12;
     if (fps < 24 || ++this.draws % 2 === 0) this.boil = (this.boil + 1) % 3;
     this.draw(p, t);
@@ -326,6 +327,18 @@ export class Buddy {
     } else if (motion === 'sway' && !calm) {
       p.lean += Math.sin(t * 2.3) * 7;
       p.tip += Math.sin(t * 2.3 - 0.8) * 0.4;
+    } else if (motion === 'sing' && intent?.lyric) {
+      this.layerSing(p, intent.lyric, t);
+    } else if (motion === 'dance' && !calm) {
+      const beat = t * Math.PI * 2;
+      p.sink -= Math.abs(Math.sin(beat)) * 6;
+      p.lean += Math.sin(beat / 2) * 7;
+      p.tip += Math.sin(beat / 2 - 0.6) * 0.35;
+      p.turn += Math.sin(beat / 4) * 0.25;
+      p.handLy += Math.sin(beat / 2) * 12;
+      p.handRy -= Math.sin(beat / 2) * 12;
+      p.footLy -= Math.max(0, Math.sin(beat / 2)) * 5;
+      p.footRy -= Math.max(0, -Math.sin(beat / 2)) * 5;
     }
 
     this.layerRide(p, intent, dt);
@@ -372,6 +385,22 @@ export class Buddy {
     p.y += (disc.y + r * Math.cos(rad) - p.y) * w;
     p.rot += (rot - p.rot) * w;
     p.shadow *= 1 - 0.75 * w;
+  }
+
+  /**
+   * Mouths along to the current line: syllables paced from its length and
+   * duration, a held vowel at the end. Not the real words, but it reads.
+   */
+  private layerSing(p: Pose, line: LyricState, t: number): void {
+    const seconds = Math.max(0.5, line.length / 1000);
+    const syllables = Math.max(2, line.text.replace(/\s+/g, '').length / 2.8);
+    const rate = Math.min(6, Math.max(2.2, syllables / seconds));
+    const done = line.elapsed / line.length;
+    const open = done < 0.85 ? 0.2 + 0.65 * Math.max(0, Math.sin((line.elapsed / 1000) * rate * Math.PI * 2)) : 0.45;
+    p.mouthOpen = Math.max(p.mouthOpen, open);
+    p.mouthO = done >= 0.85 ? 1 : p.mouthO;
+    p.lean += Math.sin(t * 1.7) * 3;
+    p.tip += Math.sin(t * 1.7 - 0.7) * 0.2;
   }
 
   /** Off the record mid-ride: the springs carry on from where he is drawn. */

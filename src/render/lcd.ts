@@ -9,6 +9,7 @@ import { isConnected, onAuthChange, SpotifyPlayer } from '../data/spotify';
 import { WeatherSource } from '../data/weather';
 import { Buddy } from './buddy/buddy';
 import { AssistantHud } from './hud';
+import { LyricsFeed, LyricsView } from './lyrics';
 import { InfoOverlay } from './overlay';
 import { Screen } from './screen';
 import { SlideshowView } from './slideshow';
@@ -73,11 +74,16 @@ export async function mountLcd(
   screen.register('slideshow', slideshow);
   screen.register('spotify', vinyl);
 
+  const lyricsView = new LyricsView();
+  vinyl.el.append(lyricsView.el);
+  const lyrics = new LyricsFeed(lyricsView, options.mock === true, settings.spotify.lyrics);
+
   const buddy = new Buddy(metrics, settings, {
     screen: () => screen.current ?? 'slideshow',
     discAngle: () => vinyl.angle(),
     discSpinning: () => vinyl.spinning,
     anchor: (name) => overlay.anchor(name),
+    lyric: () => lyricsView.state(),
   });
   screen.buddy.append(buddy.el);
   const hud = new AssistantHud();
@@ -119,6 +125,7 @@ export async function mountLcd(
     weather.sync(next.weather);
     slideshow.applySettings(next);
     vinyl.applySettings(next);
+    lyrics.setEnabled(next.spotify.lyrics);
     buddy.applySettings(next);
     assistant.sync(next);
     state.setFallbackMs(next.spotify.fallbackMs);
@@ -131,7 +138,7 @@ export async function mountLcd(
   if (options.mock) {
     const { startMock } = await import('../data/mock');
     player = startMock().player;
-    wirePlayer(player, state, vinyl, buddy);
+    wirePlayer(player, state, vinyl, buddy, lyrics);
   } else {
     // Rebuilt only when the connection or the client ID actually changes.
     let signature = '';
@@ -147,7 +154,7 @@ export async function mountLcd(
         return;
       }
       player = new SpotifyPlayer(next);
-      wirePlayer(player, state, vinyl, buddy);
+      wirePlayer(player, state, vinyl, buddy, lyrics);
     };
 
     offAuth = onAuthChange(syncPlayer);
@@ -166,6 +173,7 @@ export async function mountLcd(
       player?.stop();
       assistant.destroy();
       buddy.destroy();
+      lyrics.destroy();
       hud.destroy();
       weather.destroy();
       overlay.destroy();
@@ -258,10 +266,11 @@ class AssistantController {
   }
 }
 
-function wirePlayer(player: PlayerSource, state: ScreenState, vinyl: VinylView, buddy: Buddy): void {
+function wirePlayer(player: PlayerSource, state: ScreenState, vinyl: VinylView, buddy: Buddy, lyrics: LyricsFeed): void {
   let trackId: string | null = null;
   player.onResult((result) => {
     vinyl.update(result);
+    lyrics.result(result);
     if (result.kind === 'track' && result.now.id !== trackId) {
       if (trackId !== null && result.now.isPlaying) buddy.notice({ kind: 'track' });
       trackId = result.now.id;
