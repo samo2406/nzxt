@@ -22,13 +22,22 @@
 }
 
 .screen__stage,
-.screen__overlay {
+.screen__overlay,
+.screen__buddy {
   position: absolute;
   inset: 0;
 }
 
-.screen__overlay {
+.screen__overlay,
+.screen__buddy {
   pointer-events: none;
+}
+
+.buddy {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .view {

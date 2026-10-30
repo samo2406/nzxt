@@ -230,6 +230,18 @@ export class VinylView implements ScreenView {
     });
   }
 
+  /** The record's current rotation in degrees, for anything riding on it. */
+  angle(): number {
+    const anim = this.spinAnim;
+    const time = Number(anim?.currentTime ?? 0);
+    const period = 60_000 / Math.max(1, this.settings.spotify.rotationRpm);
+    return ((time % period) / period) * 360;
+  }
+
+  get spinning(): boolean {
+    return this.active && this.desiredRate > 0 && !prefersReducedMotion();
+  }
+
   // --------------------------------------------------------------- lifecycle
 
   applySettings(settings: Settings): void {

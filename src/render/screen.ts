@@ -17,6 +17,8 @@ export interface ScreenView {
 export class Screen {
   readonly root: HTMLElement;
   readonly overlay: HTMLElement;
+  /** Above everything: Piťu walks over both the screens and the overlay text. */
+  readonly buddy: HTMLElement;
   private readonly stage: HTMLElement;
   private readonly views = new Map<ScreenName, ScreenView>();
   private boot: HTMLElement | null;
@@ -33,11 +35,14 @@ export class Screen {
     this.overlay = document.createElement('div');
     this.overlay.className = 'screen__overlay';
 
+    this.buddy = document.createElement('div');
+    this.buddy.className = 'screen__buddy';
+
     this.boot = document.createElement('div');
     this.boot.className = 'screen__boot';
     this.boot.textContent = '…';
 
-    this.root.append(this.stage, this.overlay, this.boot);
+    this.root.append(this.stage, this.overlay, this.buddy, this.boot);
     host.append(this.root);
   }
 
@@ -46,6 +51,10 @@ export class Screen {
     view.el.dataset.active = 'false';
     this.views.set(name, view);
     this.stage.append(view.el);
+  }
+
+  get current(): ScreenName | null {
+    return this.active;
   }
 
   show(name: ScreenName): void {

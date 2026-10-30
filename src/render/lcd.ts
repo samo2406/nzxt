@@ -7,7 +7,8 @@ import type { PlayerSource } from '../data/player';
 import { getSettings, onSettingsChange, type Settings } from '../data/settings';
 import { isConnected, onAuthChange, SpotifyPlayer } from '../data/spotify';
 import { WeatherSource } from '../data/weather';
-import { FaceView } from './face';
+import { Buddy } from './buddy/buddy';
+import { AssistantHud } from './hud';
 import { InfoOverlay } from './overlay';
 import { Screen } from './screen';
 import { SlideshowView } from './slideshow';
@@ -49,14 +50,18 @@ export async function mountLcd(
   screen.overlay.append(overlay.el);
 
   let sawMonitoring = false;
+  const showTelemetry = (data: Telemetry): void => {
+    overlay.update(data);
+    noticeTemps(data);
+  };
   installMonitoring((data) => {
     sawMonitoring = true;
-    overlay.update(data);
+    showTelemetry(data);
     forwardTelemetry(data);
   });
   const sampleTimer = options.sampleTelemetryIfSilent
     ? window.setTimeout(() => {
-        if (!sawMonitoring) overlay.update(SAMPLE_TELEMETRY);
+        if (!sawMonitoring) showTelemetry(SAMPLE_TELEMETRY);
       }, SAMPLE_DELAY_MS)
     : 0;
 
@@ -68,16 +73,34 @@ export async function mountLcd(
   screen.register('slideshow', slideshow);
   screen.register('spotify', vinyl);
 
-  const face = new FaceView(settings);
-  screen.register('face', face);
+  const buddy = new Buddy(metrics, settings, {
+    screen: () => screen.current ?? 'slideshow',
+    discAngle: () => vinyl.angle(),
+    discSpinning: () => vinyl.spinning,
+    anchor: (name) => overlay.anchor(name),
+  });
+  screen.buddy.append(buddy.el);
+  const hud = new AssistantHud();
+  screen.overlay.append(hud.el);
+  slideshow.onAdvance = () => buddy.notice({ kind: 'photo' });
+  overlay.onMinute = (hour, minute) => buddy.notice({ kind: 'minute', hour, minute });
+  const noticeTemps = (t: Telemetry): void => {
+    const s = getSettings().telemetry;
+    if (!s.enabled) return;
+    if (Number.isFinite(t.cpuTempC)) buddy.notice({ kind: 'temp', which: 'cpu', value: t.cpuTempC as number, warn: (t.cpuTempC as number) >= s.cpuWarnC });
+    if (Number.isFinite(t.gpuTempC)) buddy.notice({ kind: 'temp', which: 'gpu', value: t.gpuTempC as number, warn: (t.gpuTempC as number) >= s.gpuWarnC });
+  };
 
   const state = new ScreenState(settings.spotify.fallbackMs);
-  const assistant = new AssistantController(screen, state, face, options.mock === true);
+  const assistant = new AssistantController(screen, buddy, hud, options.mock === true);
   state.onChange((name) => {
-    if (!assistant.active) screen.show(name);
+    screen.show(name);
+    buddy.notice({ kind: 'screen' });
   });
   screen.show('slideshow');
+  buddy.start();
   assistant.sync(settings);
+  const offDebug = options.mock ? mockKeys(buddy) : () => {};
 
   let lastTelemetrySent = 0;
   const forwardTelemetry = (t: Telemetry): void => {
@@ -96,7 +119,7 @@ export async function mountLcd(
     weather.sync(next.weather);
     slideshow.applySettings(next);
     vinyl.applySettings(next);
-    face.applySettings(next);
+    buddy.applySettings(next);
     assistant.sync(next);
     state.setFallbackMs(next.spotify.fallbackMs);
   });
@@ -108,7 +131,7 @@ export async function mountLcd(
   if (options.mock) {
     const { startMock } = await import('../data/mock');
     player = startMock().player;
-    wirePlayer(player, state, vinyl);
+    wirePlayer(player, state, vinyl, buddy);
   } else {
     // Rebuilt only when the connection or the client ID actually changes.
     let signature = '';
@@ -124,7 +147,7 @@ export async function mountLcd(
         return;
       }
       player = new SpotifyPlayer(next);
-      wirePlayer(player, state, vinyl);
+      wirePlayer(player, state, vinyl, buddy);
     };
 
     offAuth = onAuthChange(syncPlayer);
@@ -136,11 +159,14 @@ export async function mountLcd(
     screen,
     destroy(): void {
       clearTimeout(sampleTimer);
+      offDebug();
       offSettings();
       offAuth();
       offPlayerSettings();
       player?.stop();
       assistant.destroy();
+      buddy.destroy();
+      hud.destroy();
       weather.destroy();
       overlay.destroy();
       screen.destroy();
@@ -149,28 +175,25 @@ export async function mountLcd(
 }
 
 const TELEMETRY_FORWARD_MS = 5000;
-/** The face closes its eyes before the screen is handed back. */
-const HAND_BACK_DELAY_MS = 700;
-/** A turn that goes silent this long (agent crashed mid-sentence) gives the screen back. */
+/** A turn that goes silent this long (agent crashed mid-sentence) sends Piťu back. */
 const STALE_TURN_MS = 45_000;
 
 /**
- * Lets the voice assistant take the screen over the slideshow/music logic:
- * any non-sleeping state shows the face; 'sleeping' closes the eyes and hands
- * the screen back to whatever ScreenState currently wants.
+ * Links the voice assistant to Piťu: any non-sleeping state brings him up
+ * close over a dimmed screen, 'sleeping' sends him back to his own business.
+ * The screens underneath keep running either way.
  */
 class AssistantController {
-  active = false;
+  private active = false;
   private source: AssistantSource | null = null;
   private signature = '';
-  private handBackTimer = 0;
   private staleTimer = 0;
   private offs: (() => void)[] = [];
 
   constructor(
     private readonly screen: Screen,
-    private readonly state: ScreenState,
-    private readonly face: FaceView,
+    private readonly buddy: Buddy,
+    private readonly hud: AssistantHud,
     private readonly mock: boolean,
   ) {}
 
@@ -198,11 +221,11 @@ class AssistantController {
   }
 
   private onMessage(msg: AssistantMessage): void {
-    this.face.handle(msg);
+    this.buddy.handle(msg);
     if (msg.type === 'status') return;
     if (msg.type === 'state') {
-      if (msg.state === 'sleeping') this.scheduleHandBack();
-      else this.takeOver();
+      this.hud.setState(msg);
+      this.setActive(msg.state !== 'sleeping');
     }
     if (this.active) {
       clearTimeout(this.staleTimer);
@@ -210,27 +233,15 @@ class AssistantController {
     }
   }
 
-  private takeOver(): void {
-    clearTimeout(this.handBackTimer);
-    this.handBackTimer = 0;
-    this.active = true;
-    this.screen.show('face');
-  }
-
-  private scheduleHandBack(): void {
-    if (!this.active || this.handBackTimer) return;
-    this.handBackTimer = window.setTimeout(() => {
-      this.handBackTimer = 0;
-      this.active = false;
-      clearTimeout(this.staleTimer);
-      this.screen.show(this.state.current);
-    }, HAND_BACK_DELAY_MS);
+  private setActive(active: boolean): void {
+    this.active = active;
+    this.screen.root.dataset.assistant = active ? 'on' : 'off';
+    if (!active) clearTimeout(this.staleTimer);
   }
 
   private sleep(): void {
     if (!this.active) return;
-    this.face.handle({ type: 'state', state: 'sleeping' });
-    this.scheduleHandBack();
+    this.onMessage({ type: 'state', state: 'sleeping' });
   }
 
   private teardown(): void {
@@ -243,14 +254,18 @@ class AssistantController {
 
   destroy(): void {
     this.teardown();
-    clearTimeout(this.handBackTimer);
     clearTimeout(this.staleTimer);
   }
 }
 
-function wirePlayer(player: PlayerSource, state: ScreenState, vinyl: VinylView): void {
+function wirePlayer(player: PlayerSource, state: ScreenState, vinyl: VinylView, buddy: Buddy): void {
+  let trackId: string | null = null;
   player.onResult((result) => {
     vinyl.update(result);
+    if (result.kind === 'track' && result.now.id !== trackId) {
+      if (trackId !== null && result.now.isPlaying) buddy.notice({ kind: 'track' });
+      trackId = result.now.id;
+    }
     switch (result.kind) {
       case 'track':
         if (result.now.isPlaying) state.reportPlaying();
@@ -268,4 +283,29 @@ function wirePlayer(player: PlayerSource, state: ScreenState, vinyl: VinylView):
     }
   });
   player.start();
+}
+
+/** ?mock=1 keys for Piťu's idle life: z night · f ×10 time · p new photo · h full hour. */
+function mockKeys(buddy: Buddy): () => void {
+  const onKey = (ev: KeyboardEvent): void => {
+    switch (ev.key) {
+      case 'z':
+        buddy.life.forceNight = !buddy.life.forceNight;
+        break;
+      case 'f':
+        buddy.life.speed = buddy.life.speed === 1 ? 10 : 1;
+        break;
+      case 'p':
+        buddy.notice({ kind: 'photo' });
+        break;
+      case 'h':
+        buddy.notice({ kind: 'minute', hour: new Date().getHours(), minute: 0 });
+        break;
+      default:
+        break;
+    }
+  };
+  window.addEventListener('keydown', onKey);
+  (window as unknown as { pitu: Buddy }).pitu = buddy;
+  return () => window.removeEventListener('keydown', onKey);
 }

@@ -2,7 +2,7 @@ import type { AssistantMessage, AssistantSource, Emotion, FaceState } from './as
 
 /**
  * `?mock=1` stand-in for the voice agent: emits exactly the messages the
- * agent's WebSocket sends, so the face can be built without a mic or CAM.
+ * agent's WebSocket sends, so Piťu can be built without a mic or CAM.
  *
  * Keys: 1 sleeping · 2 listening · 3 thinking · 4 speaking · 5 offline
  *       6 alarm · 7 error · 8 shutdown countdown · 9 restart countdown

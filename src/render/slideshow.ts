@@ -27,6 +27,7 @@ export class SlideshowView implements ScreenView {
   private advancing = false;
   private settings: Settings;
   private readonly unsubscribe: () => void;
+  onAdvance: (() => void) | null = null;
 
   constructor(settings: Settings) {
     this.settings = settings;
@@ -119,6 +120,7 @@ export class SlideshowView implements ScreenView {
       retired.el.dataset.front = 'false';
       this.front = 1 - this.front;
       this.retire(retired);
+      this.onAdvance?.();
     } catch (err) {
       console.error('[slideshow] could not show photo', err);
     } finally {

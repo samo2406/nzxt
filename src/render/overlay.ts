@@ -53,6 +53,7 @@ export class InfoOverlay {
   private timer: number;
   private shownTime = '';
   private iconCode: number | null = null;
+  onMinute: ((hour: number, minute: number) => void) | null = null;
 
   constructor(settings: Settings) {
     this.settings = settings;
@@ -97,6 +98,21 @@ export class InfoOverlay {
     this.shownTime = text;
     this.clock.textContent = text;
     this.date.textContent = `${now.getDate()}.${now.getMonth() + 1}.`;
+    this.onMinute?.(now.getHours(), now.getMinutes());
+  }
+
+  /** Where a readout sits, in 640-space, or null while it is hidden. */
+  anchor(name: 'clock' | 'date' | 'weather' | 'cpu' | 'gpu'): { x: number; y: number } | null {
+    const node = { clock: this.clock, date: this.date, weather: this.weather, cpu: this.cpu, gpu: this.gpu }[name];
+    if ((name === 'cpu' || name === 'gpu') && this.temps.dataset.on !== 'true') return null;
+    if (name === 'weather' && this.weather.dataset.on !== 'true') return null;
+    const box = this.el.getBoundingClientRect();
+    const r = node.getBoundingClientRect();
+    if (!box.width || !r.width) return null;
+    return {
+      x: ((r.left + r.width / 2 - box.left) / box.width) * 640,
+      y: ((r.top + r.height / 2 - box.top) / box.height) * 640,
+    };
   }
 
   update(t: Telemetry): void {

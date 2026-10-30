@@ -5,9 +5,10 @@
   transition: opacity 400ms ease;
 }
 
-/* The music screen and the face carry no text at all, temperatures included. */
+/* The music screen carries no text at all, temperatures included, and the
+   text steps aside while Piťu is up close. */
 .screen[data-screen='spotify'] .info,
-.screen[data-screen='face'] .info {
+.screen[data-assistant='on'] .info {
   opacity: 0;
 }
 
