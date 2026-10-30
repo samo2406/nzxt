@@ -144,16 +144,18 @@ class Registry:
 
     def tool_defs(self) -> list[dict[str, Any]]:
         # Sorted and rebuilt identically every time: the tool list is part of
-        # the cached prompt prefix.
+        # the cached prompt prefix. The API allows at most 20 strict tools, and
+        # one without arguments gains nothing from it.
         return [
             {
                 "name": cmd.name,
                 "description": cmd.description,
-                "input_schema": cmd.schema(),
-                "strict": True,
+                "input_schema": schema,
+                "strict": bool(schema["properties"]),
                 "eager_input_streaming": True,
             }
             for cmd in self.commands.values()
+            for schema in (cmd.schema(),)
         ]
 
     async def run(self, tool_id: str, name: str, args: Any) -> Outcome:

@@ -19,7 +19,7 @@ import psutil
 
 from .audio import EARCON_ALARM, EARCON_ERROR, EARCON_WAKE, Fanout, Mic, Playback, Speakers, envelope
 from .brain import Brain, BrainBusy, BrainConfigError, BrainError, BrainOffline, BrainSlow, FakeBrain
-from .commands import Registry, power
+from .commands import Registry, media, power
 from .commands.apps import apps
 from .commands.timers import TIMERS, Timer
 from .config import DATA_DIR, Config, load_config
@@ -184,7 +184,7 @@ class Assistant:
         self.events = Events()
         self.speakers = Speakers(cfg.speaker_device, _saved_volume(cfg.volume))
         self.tts = TextToSpeech(cfg)
-        self.stt = SpeechToText(cfg, STT_PHRASES + list(apps()))
+        self.stt = SpeechToText(cfg, STT_PHRASES + list(apps()) + media.playlist_phrases())
         self.registry = Registry()
         self.brain: Brain | FakeBrain = FakeBrain() if args.fake_brain else Brain(cfg, self.registry)
         self.phrases = PhraseCache(cfg, self.tts)

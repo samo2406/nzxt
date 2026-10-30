@@ -9,7 +9,7 @@ from typing import Any, Protocol
 
 import anthropic
 
-from .commands import Registry, memory
+from .commands import Registry, media, memory
 from .config import PERSONA_LOCAL_PATH, PERSONA_PATH, Config
 
 log = logging.getLogger(__name__)
@@ -173,7 +173,7 @@ class Brain:
         return [*self._registry.tool_defs(), WEB_SEARCH]
 
     def _system_text(self) -> str:
-        return "\n\n".join(p for p in (self._persona.text, memory.prompt()) if p)
+        return "\n\n".join(p for p in (self._persona.text, memory.prompt(), media.playlists_prompt()) if p)
 
     def _start_turn(self, text: str) -> None:
         # Editing the system prompt or tools invalidates earlier thinking

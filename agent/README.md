@@ -19,6 +19,7 @@ mic ─► wake word (openWakeWord, local) ─► Azure STT ─► Claude (+ com
 2. **Keys.** Copy `.env.example` to `.env` and fill it in. `.env` is gitignored; keys never go anywhere else.
    - Azure portal → create a **Speech** resource, pricing tier **Free F0**, region West Europe → *Keys and Endpoint*.
    - [console.anthropic.com](https://console.anthropic.com) → API keys.
+   - Optional, for "pusti mi Elán" (Spotify Premium): put the LCD page's Spotify Client ID in `SPOTIFY_CLIENT_ID`, add `http://127.0.0.1:8766/callback` to that app's Redirect URIs in the Spotify Developer Dashboard, then log in once with `.\.venv\Scripts\python.exe -m pitu.spotify`.
 
 3. **Microphone access.** Windows Settings → Privacy & security → Microphone → *Let desktop apps access your microphone* must be on.
 
