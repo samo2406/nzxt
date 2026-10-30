@@ -56,6 +56,11 @@ FACE_FRAME_MS = 20
 WORD_LOOKAHEAD = 40
 # Talking over Piťu counts only after the echo canceller has heard a little of the reply.
 BARGE_HOLDOFF_S = 0.3
+# Said on their own, these end the conversation without asking the model.
+DISMISS = {
+    "zruš", "zruš to", "nič", "už nič", "dobre nič", "nechaj tak", "nechaj to", "netreba", "nevadí",
+    "to je všetko", "to je všetko ďakujem", "zabudni", "zabudni na to", "stop", "ticho", "cancel",
+}
 PHRASE_EMOTIONS = {"offline": "sad", "no_keys": "sad", "busy": "sleepy", "slow": "sleepy", "broken": "confused"}
 
 
@@ -111,6 +116,8 @@ class TurnSpeaker:
         self._env_frames = 0
         self._heard_audio = False
         self._aborted = False
+        # The model answered with {end}: the conversation is over, nothing to say.
+        self.ended = False
 
     @property
     def text(self) -> str:
@@ -123,6 +130,9 @@ class TurnSpeaker:
         if not text:
             return
         clean, cues = self._markup.feed(text)
+        if any(cue.message["type"] == "end" for cue in cues):
+            self.ended = True
+            cues = [cue for cue in cues if cue.message["type"] != "end"]
         if cues:
             with self._lock:
                 self._cues.extend(cues)
@@ -242,6 +252,10 @@ class TurnSpeaker:
         return spoken[:cut].strip()
 
 
+def _plain(text: str) -> str:
+    return " ".join("".join(ch for ch in text.lower() if ch.isalnum() or ch.isspace()).split())
+
+
 def _saved_volume(default: float) -> float:
     """The diagnostics page's slider wins over VOLUME in .env once it has been moved."""
     try:
@@ -280,6 +294,7 @@ class Assistant:
         self._started = time.time()
         self._proc = psutil.Process()
         self._wake_score: tuple[float, float] = (0.0, 0.0)
+        self._dismissed = False
 
         sim = args.simulate
         if sim in ("offline", "claude-slow") and isinstance(self.brain, Brain):
@@ -329,6 +344,7 @@ class Assistant:
         self.brain.last_turn = {"rounds": [], "tools": []}
         speaker = TurnSpeaker(self, timings)
         error = await self._reply(text, speaker)
+        self._dismissed = speaker.ended and not speaker.text
         self.record_turn(text, timings, speaker.text, error)
         if error is None:
             log.info(timings.report())
@@ -562,8 +578,15 @@ class Assistant:
             timings.final = time.monotonic()
             timings.speech_end = heard.speech_end
             log.info("heard: %s", heard.text)
+            if _plain(heard.text) in DISMISS:
+                log.info("dismissed")
+                self.record_turn(heard.text, timings, error="dismissed")
+                return
             self.events.set_state("thinking")
             if not await self.reply(heard.text, timings):
+                return
+            if self._dismissed:
+                log.info("dismissed by the model")
                 return
             if self._barged is not None:
                 start = max(self._barged - FOLLOW_UP_PREROLL, 0)

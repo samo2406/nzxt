@@ -1,4 +1,5 @@
-"""Face cues the model writes inline: `{happy}`, `{card:rain|12 °C|Nitra, zajtra}`.
+"""Face cues the model writes inline: `{happy}`, `{card:rain|12 °C|Nitra, zajtra}`,
+and `{end}` for "say nothing, the conversation is over".
 
 They are cut out of the reply before it is spoken; each one keeps the
 position in the spoken text where it stood, so it can be timed to the audio.
@@ -28,6 +29,8 @@ class Cue:
 
 def parse(tag: str) -> dict[str, Any] | None:
     tag = tag.strip()
+    if tag.lower() == "end":
+        return {"type": "end"}
     if tag.lower() in EMOTIONS:
         return {"type": "emotion", "name": tag.lower()}
     kind, _, rest = tag.partition(":")
