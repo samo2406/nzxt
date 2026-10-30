@@ -186,6 +186,16 @@ class TextToSpeech:
             return _StreamingUtterance(synth, self._cfg.tts_rate)
         return _ChunkedUtterance(synth, self._cfg.tts_voice, self._cfg.tts_rate)
 
+    def stop(self) -> None:
+        """Cuts off the reply being synthesised; audio still in flight is dropped."""
+        self._on_audio = lambda _b: None
+        self._on_word = lambda _w, _ms: None
+        if self._synth is not None:
+            try:
+                self._synth.stop_speaking_async()
+            except Exception as err:
+                log.debug("tts stop failed: %s", err)
+
     def fall_back_to_chunks(self) -> None:
         if self._streaming:
             log.warning("text-stream TTS failed, switching to per-clause synthesis")

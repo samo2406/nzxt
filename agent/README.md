@@ -97,14 +97,14 @@ def free_space() -> dict:
 
 ## Behaviour worth knowing
 
-- **It never hears itself.** It is half-duplex: while it talks, plus 0.3 s, the mic is ignored. You can't interrupt it mid-sentence.
+- **You can talk over it.** WebRTC echo cancellation (livekit) removes its own voice from the mic using what the first `SPEAKER_DEVICE` plays, so list the speakers the mic hears first. Any speech while it talks (voice detection ≥ `BARGE_VAD` for ~0.3 s) or the wake word stops it, and what you say becomes the next turn; the model is told how far it got. `ECHO_DELAY_MS` is the speaker→mic latency hint. With `BARGE_IN=0`, or if livekit fails to load, it is half-duplex: the mic is ignored while it talks.
 - **Follow-ups need no wake word.** After an answer it listens for about 5 s, but only sends audio to Azure once local voice detection hears someone.
 - **Other apps are ducked** to 30 % while it listens and talks. The original levels are saved to disk first, so a crash can't leave them low.
 - **Web search** runs on Anthropic's side (the `web_search` server tool, at most 3 searches per answer): "aké bude zajtra počasie", "ako hral Slovan". It says "Pozriem sa." first, since an answer takes about 5 s. The browser only opens on "vygoogli mi…". Each search costs $0.01 on top of tokens.
 - **Timers** are kept in `data/timers.json`. They ring without internet: alarm face, chime, and the label spoken (or a cached phrase when offline).
 - **Offline.** The wake word and timers keep working. Anything needing the cloud gets a short spoken apology from a phrase cache built while online, and the face shows offline.
 - **Privacy.** No audio leaves the PC before the wake word. After it, only the utterance goes to Azure. No audio is saved, but transcripts appear in the log. Conversation memory lasts 3 minutes.
-- **Resources.** Idle: about 3 % of one core (wake word on CPU), ~280 MB RAM, no GPU.
+- **Resources.** Idle: about 4 % of one core (wake word and echo cancellation on CPU), ~300 MB RAM, no GPU.
 
 ## Wake word
 

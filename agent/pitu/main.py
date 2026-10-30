@@ -11,6 +11,7 @@ import os
 import sys
 import threading
 import time
+from contextlib import suppress
 from dataclasses import dataclass, field
 from logging.handlers import RotatingFileHandler
 from typing import Any
@@ -25,6 +26,7 @@ from .commands.apps import apps
 from .commands.timers import TIMERS, Timer
 from .config import DATA_DIR, Config, load_config
 from .ducking import DUCKER
+from .echo import EchoCanceller, make_canceller
 from .events import DebugLogHandler, Events
 from .face_server import FaceServer
 from .markup import Cue, MarkupFilter
@@ -52,6 +54,8 @@ FACE_FRAME_MS = 20
 # A word Azure reports is looked for this far ahead in the spoken text; numbers it
 # normalises ("12" → "dvanásť") are skipped rather than matched somewhere later.
 WORD_LOOKAHEAD = 40
+# Talking over Piťu counts only after the echo canceller has heard a little of the reply.
+BARGE_HOLDOFF_S = 0.3
 PHRASE_EMOTIONS = {"offline": "sad", "no_keys": "sad", "busy": "sleepy", "slow": "sleepy", "broken": "confused"}
 
 
@@ -106,6 +110,7 @@ class TurnSpeaker:
         self._env_carry = b""
         self._env_frames = 0
         self._heard_audio = False
+        self._aborted = False
 
     @property
     def text(self) -> str:
@@ -169,9 +174,10 @@ class TurnSpeaker:
     def _on_playback_start(self, wall: float) -> None:
         self._timings.audio = time.monotonic()
         self._app.events.set_state("speaking", at=int(wall * 1000))
+        self._app.arm_barge()
 
     def _on_audio(self, pcm: bytes) -> None:
-        if not pcm or self._playback is None:
+        if not pcm or self._playback is None or self._aborted:
             return
         self._heard_audio = True
         self._playback.feed(pcm)
@@ -211,13 +217,29 @@ class TurnSpeaker:
         await asyncio.to_thread(self._playback.wait, 120)
 
     def abort(self) -> None:
+        self._aborted = True
         if self._utt is not None:
             try:
                 self._utt.close()
             except Exception:
                 pass
+            self._app.tts.stop()
         if self._playback is not None:
             self._playback.stop()
+
+    def heard(self) -> str:
+        """The part of the reply that had come out of the speakers by now."""
+        started = self._playback.started_at if self._playback is not None else None
+        spoken = self._markup.spoken
+        if started is None:
+            return ""
+        played = (time.monotonic() - started) * 1000 / FACE_FRAME_MS
+        with self._lock:
+            words = list(self._words)
+        cut = next((at for at, frame in words if frame > played), None)
+        if cut is None:
+            cut = round(len(spoken) * min(1.0, played / max(1, self._env_frames)))
+        return spoken[:cut].strip()
 
 
 def _saved_volume(default: float) -> float:
@@ -248,6 +270,10 @@ class Assistant:
         self.face: FaceServer | None = None
         self._wake_q: asyncio.Queue[int] = asyncio.Queue()
         self._speech_q: asyncio.Queue[int] = asyncio.Queue()
+        self._barge_q: asyncio.Queue[int] = asyncio.Queue()
+        self.echo: EchoCanceller | None = None
+        # Mic frame where the user started talking over the last reply.
+        self._barged: int | None = None
         # A conversation and a ringing timer never share the speakers.
         self._turn_lock = asyncio.Lock()
         DUCKER.level = cfg.duck_level
@@ -318,8 +344,10 @@ class Assistant:
             await self.say_phrase("no_keys")
             return "no_keys"
         try:
-            await self.brain.respond(text, speaker)
-            await speaker.finish()
+            if self.echo is None or self.listener is None:
+                await self._respond(text, speaker)
+            else:
+                await self._respond_interruptibly(text, speaker)
         except BrainError as err:
             speaker.abort()
             key = {BrainOffline: "offline", BrainBusy: "busy", BrainSlow: "slow"}.get(type(err), "broken")
@@ -335,6 +363,39 @@ class Assistant:
             await self.say_phrase("offline")
             return "tts"
         return None
+
+    async def _respond(self, text: str, speaker: TurnSpeaker) -> None:
+        await self.brain.respond(text, speaker)
+        await speaker.finish()
+
+    async def _respond_interruptibly(self, text: str, speaker: TurnSpeaker) -> None:
+        """The reply runs while the listener waits for the user to talk over it
+        (armed once the audio starts); if they do, Piťu stops mid-word."""
+        assert self.listener is not None
+        while not self._barge_q.empty():
+            self._barge_q.get_nowait()
+        work = asyncio.ensure_future(self._respond(text, speaker))
+        barge = asyncio.ensure_future(self._barge_q.get())
+        try:
+            await asyncio.wait({work, barge}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            self.listener.set_mode("off")
+        if not barge.done():
+            barge.cancel()
+            await work
+            return
+        speaker.abort()
+        work.cancel()
+        with suppress(asyncio.CancelledError, BrainError, TtsError):
+            await work
+        heard = speaker.heard()
+        log.info("interrupted after: %s", heard or "-")
+        self.brain.interrupted(heard)
+        self._barged = barge.result()
+
+    def arm_barge(self) -> None:
+        if self.echo is not None and self.listener is not None and self._turn_lock.locked():
+            self.listener.set_mode("barge", holdoff=BARGE_HOLDOFF_S)
 
     # ------------------------------------------------------------ diagnostics
 
@@ -414,9 +475,14 @@ class Assistant:
         from .listener import Listener
 
         loop = asyncio.get_running_loop()
-        self.mic = Mic(self.cfg.mic_device)
+        self.echo = make_canceller(self.cfg.echo_delay_ms) if self.cfg.barge_in else None
+        if self.echo is not None:
+            self.speakers.on_render = self.echo.reference
+            log.info("echo cancellation on: talking over Piťu interrupts it")
+        self.mic = Mic(self.cfg.mic_device, echo=self.echo)
         self.mic.on_error_change = lambda e: loop.call_soon_threadsafe(self.events.emit, {"type": "status", "mic": e})
-        self.listener = Listener(self.mic, self.cfg.wake_model, self.cfg.wake_threshold)
+        self.listener = Listener(self.mic, self.cfg.wake_model, self.cfg.wake_threshold, self.cfg.barge_vad)
+        self.listener.on_barge = lambda i: loop.call_soon_threadsafe(self._barge_q.put_nowait, i)
         self.listener.on_wake = lambda i, _s: loop.call_soon_threadsafe(self._wake_q.put_nowait, i)
         self.listener.on_speech = lambda i: loop.call_soon_threadsafe(self._speech_q.put_nowait, i)
         self.listener.on_score = self._on_score
@@ -499,6 +565,13 @@ class Assistant:
             self.events.set_state("thinking")
             if not await self.reply(heard.text, timings):
                 return
+            if self._barged is not None:
+                start = max(self._barged - FOLLOW_UP_PREROLL, 0)
+                self._barged = None
+                self.events.set_state("listening", followUp=True)
+                self.events.emit({"type": "emotion", "name": "surprised", "offset": None})
+                follow_up = True
+                continue
 
             await asyncio.sleep(ECHO_TAIL_S)
             while not self._speech_q.empty():

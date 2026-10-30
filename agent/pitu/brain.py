@@ -107,6 +107,7 @@ class Brain:
         self._pending_results: list[dict[str, Any]] = []
         self._last_turn = 0.0
         self._spoke = False
+        self._interrupted: str | None = None
         self.simulate: str | None = None
         self.last_turn: dict[str, Any] = {"rounds": [], "tools": []}
 
@@ -186,7 +187,16 @@ class Brain:
             self._tools = self._tool_defs()
             # Read once per conversation: a fact saved mid-conversation is already in its history.
             self._system = self._system_text()
-        content = [*self._pending_results, {"type": "text", "text": f"{_context_line()} {text}"}]
+        note = ""
+        if self._interrupted is not None and self._messages:
+            heard = self._interrupted.strip()
+            note = (
+                f"(Skočil ti do reči; stihol si povedať len: „{heard}“) "
+                if heard
+                else "(Skočil ti do reči skôr, než si niečo povedal.) "
+            )
+        self._interrupted = None
+        content = [*self._pending_results, {"type": "text", "text": f"{_context_line()} {note}{text}"}]
         self._pending_results = []
         self._messages.append({"role": "user", "content": content})
 
@@ -243,8 +253,33 @@ class Brain:
                     self._pending_results = results
                     return
                 self._messages.append({"role": "user", "content": results})
+        except asyncio.CancelledError:
+            self._settle_cancelled()
+            raise
         finally:
             self._last_turn = time.monotonic()
+
+    def interrupted(self, heard: str) -> None:
+        """The user talked over the reply; the next turn tells the model what they heard."""
+        self._interrupted = heard
+
+    def _settle_cancelled(self) -> None:
+        """A turn cut off mid-way must still leave a history the API accepts."""
+        if not self._messages:
+            return
+        last = self._messages[-1]
+        if last["role"] == "user":
+            # The unanswered message goes; tool results in it still answer the turn before.
+            self._messages.pop()
+            self._pending_results = [
+                b for b in last["content"] if isinstance(b, dict) and b.get("type") == "tool_result"
+            ]
+        else:
+            self._pending_results = [
+                {"type": "tool_result", "tool_use_id": b.id, "content": "prerušené", "is_error": True}
+                for b in last["content"]
+                if getattr(b, "type", None) == "tool_use"
+            ]
 
     async def _round(self, sink: ReplySink):
         if self.simulate == "claude-slow":
@@ -327,6 +362,9 @@ class FakeBrain:
         self.last_turn: dict[str, Any] = {"rounds": [], "tools": []}
 
     async def prewarm(self) -> None:
+        pass
+
+    def interrupted(self, heard: str) -> None:
         pass
 
     async def respond(self, text: str, sink: ReplySink) -> None:

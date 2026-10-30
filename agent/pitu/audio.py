@@ -6,10 +6,13 @@ import sys
 import threading
 import time
 from collections import deque
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import sounddevice as sd
+
+if TYPE_CHECKING:
+    from .echo import EchoCanceller
 
 log = logging.getLogger(__name__)
 
@@ -65,8 +68,9 @@ class Mic:
     moment the wake word ended, not from when the cloud connection was ready.
     """
 
-    def __init__(self, device_hint: str = "", ring_seconds: float = 6.0) -> None:
+    def __init__(self, device_hint: str = "", ring_seconds: float = 6.0, echo: EchoCanceller | None = None) -> None:
         self._hint = device_hint
+        self._echo = echo
         self._ring: deque[tuple[int, float, np.ndarray]] = deque(maxlen=int(ring_seconds / FRAME_S))
         self._lock = threading.Lock()
         self._consumers: list[Callable[[int, np.ndarray], None]] = []
@@ -115,6 +119,12 @@ class Mic:
         if status:
             log.debug("mic status: %s", status)
         frame = indata[:, 0].copy()
+        if self._echo is not None:
+            try:
+                frame = self._echo.process(frame)
+            except Exception:
+                log.exception("echo cancellation failed, using the raw mic from now on")
+                self._echo = None
         now = time.monotonic()
         with self._lock:
             idx = self._index
@@ -190,12 +200,16 @@ class Playback:
     """One utterance on the speakers. The device is opened per utterance so an
     idle assistant holds no audio stream at all."""
 
-    def __init__(self, device: int | None, volume: float = 1.0) -> None:
+    def __init__(
+        self, device: int | None, volume: float = 1.0, on_render: Callable[[bytes], None] | None = None
+    ) -> None:
         self._device = device
+        self._on_render = on_render
         self._volume = volume
         self._buf = bytearray()
         self._lock = threading.Lock()
         self._finished = False
+        self._stopped = False
         self._drained = threading.Event()
         self._stream: sd.RawOutputStream | None = None
         self.started_at: float | None = None
@@ -203,7 +217,7 @@ class Playback:
         self.on_start: Callable[[float], None] = lambda _wall: None
 
     def feed(self, pcm: bytes) -> None:
-        if not pcm:
+        if not pcm or self._stopped:
             return
         if self._volume != 1.0:
             pcm = (np.frombuffer(pcm, dtype=np.int16) * self._volume).astype(np.int16).tobytes()
@@ -222,6 +236,7 @@ class Playback:
         with self._lock:
             self._buf.clear()
             self._finished = True
+            self._stopped = True
         self._close()
         self._drained.set()
 
@@ -269,6 +284,8 @@ class Playback:
         outdata[: len(chunk)] = chunk
         if len(chunk) < need:
             outdata[len(chunk):] = b"\x00" * (need - len(chunk))
+        if self._on_render is not None:
+            self._on_render(bytes(outdata))
         if finished:
             raise sd.CallbackStop
 
@@ -329,17 +346,21 @@ class Fanout:
 
 
 class Speakers:
-    """`device_hint` may name several outputs, comma-separated; each utterance plays on all of them."""
+    """`device_hint` may name several outputs, comma-separated; each utterance plays on all of them.
+
+    What the first one renders is the echo canceller's reference, so list the
+    output the mic actually hears (the speakers, not headphones) first.
+    """
 
     def __init__(self, device_hint: str = "", volume: float = 1.0) -> None:
         self._hints = [h.strip() for h in device_hint.split(",") if h.strip()] or [""]
         self.volume = volume
+        self.on_render: Callable[[bytes], None] | None = None
 
     def open(self) -> Playback | Fanout:
         devices = list(dict.fromkeys(find_device(h, "output") for h in self._hints))
-        if len(devices) == 1:
-            return Playback(devices[0], self.volume)
-        return Fanout([Playback(d, self.volume) for d in devices])
+        playbacks = [Playback(d, self.volume, self.on_render if i == 0 else None) for i, d in enumerate(devices)]
+        return playbacks[0] if len(playbacks) == 1 else Fanout(playbacks)
 
     def play(self, pcm: bytes, on_start: Callable[[float], None] | None = None) -> Playback | Fanout:
         pb = self.open()

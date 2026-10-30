@@ -55,6 +55,9 @@ class Config:
     face_port: int
     duck_level: float
     allowed_origins: tuple[str, ...]
+    barge_in: bool
+    echo_delay_ms: int
+    barge_vad: float
 
     @property
     def has_azure(self) -> bool:
@@ -85,4 +88,7 @@ def load_config() -> Config:
         face_port=int(_env_float("FACE_PORT", 8765)),
         duck_level=min(1.0, max(0.0, _env_float("DUCK_LEVEL", 0.3))),
         allowed_origins=PAGES_ORIGIN + (DEV_ORIGINS if _env("FACE_DEV_ORIGINS") == "1" else ()),
+        barge_in=_env("BARGE_IN", "1") != "0",
+        echo_delay_ms=int(_env_float("ECHO_DELAY_MS", 120)),
+        barge_vad=min(1.0, max(0.0, _env_float("BARGE_VAD", 0.8))),
     )
